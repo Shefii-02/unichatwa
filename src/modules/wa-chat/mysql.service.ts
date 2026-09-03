@@ -1,6 +1,10 @@
 import { Injectable, OnModuleDestroy, Logger } from '@nestjs/common';
 import * as mysql from 'mysql2/promise';
 
+/** Bound parameter values accepted by a prepared statement. mysql2's own `ExecuteValues` type is
+ *  not re-exported from the package root, so this mirrors the useful subset. */
+type SqlParam = string | number | bigint | boolean | Date | Buffer | null;
+
 @Injectable()
 export class MysqlService implements OnModuleDestroy {
   private pool: mysql.Pool | null = null;
@@ -22,12 +26,12 @@ export class MysqlService implements OnModuleDestroy {
     return this.pool;
   }
 
-  async query<T = unknown>(sql: string, values?: unknown[]): Promise<T[]> {
+  async query<T = unknown>(sql: string, values: SqlParam[] = []): Promise<T[]> {
     const [rows] = await this.getPool().execute(sql, values);
     return rows as T[];
   }
 
-  async execute(sql: string, values?: unknown[]): Promise<void> {
+  async execute(sql: string, values: SqlParam[] = []): Promise<void> {
     await this.getPool().execute(sql, values);
   }
 
