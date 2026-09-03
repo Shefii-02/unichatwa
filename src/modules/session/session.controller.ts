@@ -51,7 +51,10 @@ import { ENGINE_NOT_READY_409, PAIRING_NOT_READY_409 } from '../../common/openap
 // allowedSessions scope against it (other controllers' `:id` is an unrelated resource id).
 @SessionScoped()
 export class SessionController {
-  private readonly groupsCache = new Map<string, { data: { id: string; name: string; linkedParentJID?: string | null }[]; expiresAt: number }>();
+  private readonly groupsCache = new Map<
+    string,
+    { data: { id: string; name: string; linkedParentJID?: string | null }[]; expiresAt: number }
+  >();
 
   constructor(
     private readonly sessionService: SessionService,

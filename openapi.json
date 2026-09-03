@@ -4849,6 +4849,66 @@
         ]
       }
     },
+    "/api/sessions/{sessionId}/groups/for-contact": {
+      "get": {
+        "description": "Computed server-side in one call. The dashboard alternative — fetching every group's member list from the browser — fans out dozens of requests and trips the API rate limiter.",
+        "operationId": "GroupController_getSharedGroups",
+        "parameters": [
+          {
+            "name": "sessionId",
+            "required": true,
+            "in": "path",
+            "description": "Session ID",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "contactId",
+            "required": true,
+            "in": "query",
+            "description": "Contact id — <phone>@c.us, <lid>@lid, or bare digits",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Max groups to scan (default 100)",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Groups the contact is a participant of",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/GroupSummaryDto"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Session not started"
+          },
+          "409": {
+            "description": "The session is not connected — an engine exists for it but is not `ready`: disconnected, reconnecting, or still initializing, so the request never reached WhatsApp. Wait for `ready` and retry. A session that was never started answers `400` instead, and the session lifecycle routes answer `409` for a conflicting state rather than this. One window answers this while the session still reads `ready`: WhatsApp Web periodically reloads its own page and the engine re-injects into it — for those few seconds the answer is a `409` naming the reload; retry shortly."
+          }
+        },
+        "summary": "List the groups this session shares with one contact",
+        "tags": [
+          "groups"
+        ]
+      }
+    },
     "/api/sessions/{sessionId}/groups/{groupId}": {
       "get": {
         "operationId": "GroupController_findOne",
@@ -9421,6 +9481,52 @@
         "summary": "Search messages across sessions (active search provider)",
         "tags": [
           "search"
+        ]
+      }
+    },
+    "/api/api/internal/staff-online": {
+      "post": {
+        "operationId": "InternalController_staffOnline",
+        "parameters": [
+          {
+            "name": "x-internal-key",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Internal"
+        ]
+      }
+    },
+    "/api/api/internal/emit-notification": {
+      "post": {
+        "operationId": "InternalController_emitNotification",
+        "parameters": [
+          {
+            "name": "x-internal-key",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Internal"
         ]
       }
     }
@@ -14313,6 +14419,41 @@
           "name"
         ]
       },
+      "GroupSummaryDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Group id.",
+            "example": "120363000000000000@g.us"
+          },
+          "name": {
+            "type": "string",
+            "description": "Group subject.",
+            "example": "Engineering"
+          },
+          "participantsCount": {
+            "type": "number",
+            "description": "Member count, when the engine reports it.",
+            "example": 42
+          },
+          "isAdmin": {
+            "type": "boolean",
+            "description": "Whether this account is an admin of the group.",
+            "example": true
+          },
+          "linkedParentJID": {
+            "type": "string",
+            "nullable": true,
+            "description": "JID of the parent community, or null when the group is standalone.",
+            "example": null
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ]
+      },
       "GroupParticipantDto": {
         "type": "object",
         "properties": {
@@ -14557,41 +14698,6 @@
         "required": [
           "name",
           "participants"
-        ]
-      },
-      "GroupSummaryDto": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "description": "Group id.",
-            "example": "120363000000000000@g.us"
-          },
-          "name": {
-            "type": "string",
-            "description": "Group subject.",
-            "example": "Engineering"
-          },
-          "participantsCount": {
-            "type": "number",
-            "description": "Member count, when the engine reports it.",
-            "example": 42
-          },
-          "isAdmin": {
-            "type": "boolean",
-            "description": "Whether this account is an admin of the group.",
-            "example": true
-          },
-          "linkedParentJID": {
-            "type": "string",
-            "nullable": true,
-            "description": "JID of the parent community, or null when the group is standalone.",
-            "example": null
-          }
-        },
-        "required": [
-          "id",
-          "name"
         ]
       },
       "ParticipantsDto": {

@@ -13,14 +13,14 @@ export class MysqlService implements OnModuleDestroy {
   private getPool(): mysql.Pool {
     if (!this.pool) {
       this.pool = mysql.createPool({
-        host:     process.env.SHARED_DB_HOST     || 'localhost',
-        port:     parseInt(process.env.SHARED_DB_PORT || '3306', 10),
+        host: process.env.SHARED_DB_HOST || 'localhost',
+        port: parseInt(process.env.SHARED_DB_PORT || '3306', 10),
         database: process.env.SHARED_DB_DATABASE || 'waapi',
-        user:     process.env.SHARED_DB_USERNAME || 'root',
+        user: process.env.SHARED_DB_USERNAME || 'root',
         password: process.env.SHARED_DB_PASSWORD || '',
         waitForConnections: true,
-        connectionLimit:    10,
-        queueLimit:         0,
+        connectionLimit: 10,
+        queueLimit: 0,
       });
     }
     return this.pool;

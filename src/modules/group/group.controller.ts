@@ -93,7 +93,7 @@ export class GroupController {
   @ApiOperation({
     summary: 'List the groups this session shares with one contact',
     description:
-      'Computed server-side in one call. The dashboard alternative — fetching every group\'s member ' +
+      "Computed server-side in one call. The dashboard alternative — fetching every group's member " +
       'list from the browser — fans out dozens of requests and trips the API rate limiter.',
   })
   @ApiParam({ name: 'sessionId', description: 'Session ID' })

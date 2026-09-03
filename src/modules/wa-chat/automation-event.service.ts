@@ -39,26 +39,27 @@ export class AutomationEventService {
 
       if (!rows.length || !rows[0].waha_webhook_url) return;
 
-      const laravelWebhookUrl = process.env.LARAVEL_WEBHOOK_URL
-        || `${process.env.LARAVEL_BASE_URL || 'http://localhost:8000'}/api/v1/waha/webhook`;
+      const laravelWebhookUrl =
+        process.env.LARAVEL_WEBHOOK_URL ||
+        `${process.env.LARAVEL_BASE_URL || 'http://localhost:8000'}/api/v1/waha/webhook`;
 
       const eventBody = {
-        event:   'message',
+        event: 'message',
         session: sessionId,
         payload: {
-          from:   message.payload?.from,
+          from: message.payload?.from,
           fromMe: false,
-          body:   message.payload?.body ?? '',
-          type:   message.payload?.type ?? 'text',
+          body: message.payload?.body ?? '',
+          type: message.payload?.type ?? 'text',
           chatId: message.payload?.chatId ?? message.payload?.from,
         },
       };
 
       const resp = await fetch(laravelWebhookUrl, {
-        method:  'POST',
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify(eventBody),
-        signal:  AbortSignal.timeout(5000),
+        body: JSON.stringify(eventBody),
+        signal: AbortSignal.timeout(5000),
       });
 
       if (!resp.ok) {
@@ -72,12 +73,7 @@ export class AutomationEventService {
   /**
    * Log inbound message to shared MySQL for cross-system visibility.
    */
-  async logInboundMessage(
-    sessionId: string,
-    companyId: number,
-    from: string,
-    body: string,
-  ): Promise<void> {
+  async logInboundMessage(sessionId: string, companyId: number, from: string): Promise<void> {
     try {
       await this.mysql.execute(
         `INSERT INTO waha_message_logs
