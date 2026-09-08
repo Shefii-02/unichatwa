@@ -173,6 +173,10 @@ export class SessionLivenessWatchdog {
     this.logger.warn('Liveness probe failed repeatedly; handling the session as disconnected', {
       sessionId: id,
       failures,
+      // How many engines this process is driving right now. A session going dead here while several
+      // others are live points at host-level contention (CPU/RAM starving one Chromium) rather than
+      // a fault isolated to this session — the two need different fixes.
+      liveEngines: [...this.engines].length,
       action: 'watchdog_disconnect',
     });
     await this.onDead(id, engine, 'liveness probe failed (watchdog)');

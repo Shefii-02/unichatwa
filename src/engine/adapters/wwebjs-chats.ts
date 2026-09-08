@@ -26,6 +26,14 @@ export class WwebjsChats {
   async getChats(): Promise<ChatSummary[]> {
     this.host.ensureReady();
     let chats: Awaited<ReturnType<Client['getChats']>>;
+    // `client.getChats()` is the heaviest read this engine serves — it serializes every chat across
+    // the Chromium CDP bridge. Time it: when a session drops shortly after another session's dashboard
+    // switch, these markers are what correlate the disconnect with a concurrent full chat-list dump.
+    const startedAt = Date.now();
+    this.host.logger.debug('getChats started', {
+      sessionId: this.host.config.sessionId,
+      action: 'get_chats_start',
+    });
     try {
       chats = await this.client().getChats();
     } catch (error) {
@@ -36,6 +44,20 @@ export class WwebjsChats {
         throw new EngineTransportError('Transport died while listing chats');
       }
       throw error;
+    }
+    const elapsedMs = Date.now() - startedAt;
+    const doneCtx = {
+      sessionId: this.host.config.sessionId,
+      action: 'get_chats_done',
+      duration: elapsedMs,
+      count: chats.length,
+    };
+    // A slow dump (seconds) is the smell of Chromium contention across sessions — log it loud enough
+    // to see without debug logging on.
+    if (elapsedMs >= 3000) {
+      this.host.logger.warn('getChats finished slowly', doneCtx);
+    } else {
+      this.host.logger.debug('getChats finished', doneCtx);
     }
     const summaries: ChatSummary[] = [];
     let skipped = 0;
