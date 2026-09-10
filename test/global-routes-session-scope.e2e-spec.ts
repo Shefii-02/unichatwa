@@ -14,10 +14,12 @@ import { ApiKeyRole } from './../src/modules/auth/entities/api-key.entity';
 import { Session } from './../src/modules/session/entities/session.entity';
 
 /**
- * Cross-session aggregates, environment-derived settings, and session creation all act outside any
- * single session, so the guard's route-param fence cannot scope them. A key restricted to specific
- * sessions must not read deployment-wide activity, read server configuration, or create sessions
- * outside its own allowlist.
+ * Environment-derived settings and session creation act outside any single session, so the guard's
+ * route-param fence cannot scope them — a session-restricted key must not read server configuration
+ * or create sessions outside its own allowlist.
+ *
+ * The stats aggregates are the exception: a session-scoped key gets the aggregate over ITS OWN
+ * sessions (safe — it's already confined to those); only an *unscoped* non-admin key is refused.
  */
 describe('Global read and create routes reject session-scoped keys (e2e)', () => {
   let app: INestApplication<App>;
@@ -54,12 +56,20 @@ describe('Global read and create routes reject session-scoped keys (e2e)', () =>
     }
   });
 
-  it('rejects a scoped ADMIN on GET /api/stats/overview', async () => {
-    await request(app.getHttpServer()).get('/api/stats/overview').set('X-API-Key', scopedAdminKey).expect(403);
+  it('lets a session-scoped key read GET /api/stats/overview, confined to its own sessions', async () => {
+    const res = await request(app.getHttpServer())
+      .get('/api/stats/overview')
+      .set('X-API-Key', scopedOperatorKey);
+    expect(res.status).toBe(200);
+    // Only the one session the key is scoped to can be counted.
+    expect(res.body.sessions.total).toBeLessThanOrEqual(1);
   });
 
-  it('rejects a scoped ADMIN on GET /api/stats/messages', async () => {
-    await request(app.getHttpServer()).get('/api/stats/messages').set('X-API-Key', scopedAdminKey).expect(403);
+  it('lets a session-scoped key read GET /api/stats/messages', async () => {
+    await request(app.getHttpServer())
+      .get('/api/stats/messages')
+      .set('X-API-Key', scopedAdminKey)
+      .expect(200);
   });
 
   it('rejects a scoped ADMIN on GET /api/settings', async () => {

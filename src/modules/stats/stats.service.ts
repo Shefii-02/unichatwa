@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { ConfigService } from '@nestjs/config';
-import { Repository } from 'typeorm';
+import { In, Repository, type SelectQueryBuilder } from 'typeorm';
 import { Session, SessionStatus } from '../session/entities/session.entity';
 import { Message, MessageStatus } from '../message/entities/message.entity';
 import { CacheService } from '../../common/cache';
@@ -121,13 +121,36 @@ export class StatsService {
     return value;
   }
 
-  async getOverview(): Promise<OverviewStats> {
-    return this.memoized('overview', () => this.loadOverview());
+  /**
+   * A stable memo-key fragment for the caller's session scope. `null`/empty →
+   * unrestricted ('all'); otherwise the sorted id list, so a scoped key never
+   * reads an unscoped cached aggregate (or vice versa).
+   */
+  private scopeKey(allowedSessions?: string[] | null): string {
+    return allowedSessions && allowedSessions.length > 0
+      ? [...new Set(allowedSessions)].sort().join(',')
+      : 'all';
   }
 
-  private async loadOverview(): Promise<OverviewStats> {
+  /** Apply `m.sessionId IN (...)` when the caller's key is session-scoped. */
+  private scopeMessages(qb: SelectQueryBuilder<Message>, allowedSessions?: string[] | null): SelectQueryBuilder<Message> {
+    if (allowedSessions && allowedSessions.length > 0) {
+      qb.andWhere('m.sessionId IN (:...scopeIds)', { scopeIds: allowedSessions });
+    }
+    return qb;
+  }
+
+  async getOverview(allowedSessions?: string[] | null): Promise<OverviewStats> {
+    return this.memoized(`overview:${this.scopeKey(allowedSessions)}`, () => this.loadOverview(allowedSessions));
+  }
+
+  private async loadOverview(allowedSessions?: string[] | null): Promise<OverviewStats> {
+    const scoped = !!(allowedSessions && allowedSessions.length > 0);
+
     // Get session stats
-    const sessions = await this.sessionRepo.find();
+    const sessions = await this.sessionRepo.find(
+      scoped ? { where: { id: In(allowedSessions!) } } : {},
+    );
     const byStatus: Record<string, number> = {};
     let active = 0;
 
@@ -140,20 +163,24 @@ export class StatsService {
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
 
-    const messageStats = await this.messageRepo
-      .createQueryBuilder('m')
-      .select('m.direction', 'direction')
-      .addSelect('COUNT(*)', 'count')
-      .groupBy('m.direction')
-      .getRawMany<{ direction: string; count: string }>();
+    const messageStats = await this.scopeMessages(
+      this.messageRepo
+        .createQueryBuilder('m')
+        .select('m.direction', 'direction')
+        .addSelect('COUNT(*)', 'count')
+        .groupBy('m.direction'),
+      allowedSessions,
+    ).getRawMany<{ direction: string; count: string }>();
 
-    const todayStats = await this.messageRepo
-      .createQueryBuilder('m')
-      .select('m.direction', 'direction')
-      .addSelect('COUNT(*)', 'count')
-      .where('m.createdAt >= :todayStart', { todayStart })
-      .groupBy('m.direction')
-      .getRawMany<{ direction: string; count: string }>();
+    const todayStats = await this.scopeMessages(
+      this.messageRepo
+        .createQueryBuilder('m')
+        .select('m.direction', 'direction')
+        .addSelect('COUNT(*)', 'count')
+        .where('m.createdAt >= :todayStart', { todayStart })
+        .groupBy('m.direction'),
+      allowedSessions,
+    ).getRawMany<{ direction: string; count: string }>();
 
     const sent = parseInt(messageStats.find(m => m.direction === 'outgoing')?.count || '0');
     const received = parseInt(messageStats.find(m => m.direction === 'incoming')?.count || '0');
@@ -162,15 +189,20 @@ export class StatsService {
 
     // Count failed messages
     const failed = await this.messageRepo.count({
-      where: { status: MessageStatus.FAILED },
+      where: scoped
+        ? { status: MessageStatus.FAILED, sessionId: In(allowedSessions!) }
+        : { status: MessageStatus.FAILED },
     });
 
-    // Cache session stats
-    await this.cacheService.setSessionsStats({
-      active,
-      total: sessions.length,
-      byStatus,
-    });
+    // Cache session stats — only the unscoped view is the global truth; a
+    // per-company slice must never overwrite it.
+    if (!scoped) {
+      await this.cacheService.setSessionsStats({
+        active,
+        total: sessions.length,
+        byStatus,
+      });
+    }
 
     return {
       sessions: {
@@ -187,28 +219,34 @@ export class StatsService {
     };
   }
 
-  async getMessageStats(period: '24h' | '7d' | '30d'): Promise<MessageStats> {
-    return this.memoized(`messages:${period}`, () => this.loadMessageStats(period));
+  async getMessageStats(period: '24h' | '7d' | '30d', allowedSessions?: string[] | null): Promise<MessageStats> {
+    return this.memoized(
+      `messages:${period}:${this.scopeKey(allowedSessions)}`,
+      () => this.loadMessageStats(period, allowedSessions),
+    );
   }
 
-  private async loadMessageStats(period: '24h' | '7d' | '30d'): Promise<MessageStats> {
+  private async loadMessageStats(period: '24h' | '7d' | '30d', allowedSessions?: string[] | null): Promise<MessageStats> {
     const since = this.getPeriodStart(period);
     const interval = period === '24h' ? 'hour' : 'day';
+    const scoped = !!(allowedSessions && allowedSessions.length > 0);
 
     // Time series - using raw query for SQLite compatibility
-    const timeSeries = await this.getTimeSeries(since, interval);
+    const timeSeries = await this.getTimeSeries(since, interval, allowedSessions);
 
     // By type. Rows with no body AND no metadata are content-less system/event rows (e.g. @lid
     // privacy-user events the engine maps to `unknown`) — counting them would put a misleading
     // "unknown" slice in the by-type chart, so they're excluded from the aggregation.
-    const byTypeRaw = await this.messageRepo
-      .createQueryBuilder('m')
-      .select('m.type', 'type')
-      .addSelect('COUNT(*)', 'count')
-      .where('m.createdAt >= :since', { since })
-      .andWhere("(m.body IS NOT NULL AND m.body != '') OR m.metadata IS NOT NULL")
-      .groupBy('m.type')
-      .getRawMany<{ type: string; count: string }>();
+    const byTypeRaw = await this.scopeMessages(
+      this.messageRepo
+        .createQueryBuilder('m')
+        .select('m.type', 'type')
+        .addSelect('COUNT(*)', 'count')
+        .where('m.createdAt >= :since', { since })
+        .andWhere("(m.body IS NOT NULL AND m.body != '') OR m.metadata IS NOT NULL")
+        .groupBy('m.type'),
+      allowedSessions,
+    ).getRawMany<{ type: string; count: string }>();
 
     const byType: Record<string, number> = {};
     for (const row of byTypeRaw) {
@@ -216,15 +254,17 @@ export class StatsService {
     }
 
     // By session
-    const bySessionRaw = await this.messageRepo
-      .createQueryBuilder('m')
-      .select('m.sessionId', 'sessionId')
-      .addSelect('m.direction', 'direction')
-      .addSelect('COUNT(*)', 'count')
-      .where('m.createdAt >= :since', { since })
-      .groupBy('m.sessionId')
-      .addGroupBy('m.direction')
-      .getRawMany<{ sessionId: string; direction: string; count: string }>();
+    const bySessionRaw = await this.scopeMessages(
+      this.messageRepo
+        .createQueryBuilder('m')
+        .select('m.sessionId', 'sessionId')
+        .addSelect('m.direction', 'direction')
+        .addSelect('COUNT(*)', 'count')
+        .where('m.createdAt >= :since', { since })
+        .groupBy('m.sessionId')
+        .addGroupBy('m.direction'),
+      allowedSessions,
+    ).getRawMany<{ sessionId: string; direction: string; count: string }>();
 
     const sessionMap = new Map<string, { sent: number; received: number }>();
     for (const row of bySessionRaw) {
@@ -236,7 +276,9 @@ export class StatsService {
       else entry.received = parseInt(row.count);
     }
 
-    const sessions = await this.sessionRepo.find();
+    const sessions = await this.sessionRepo.find(
+      scoped ? { where: { id: In(allowedSessions!) } } : {},
+    );
     const sessionNames = new Map(sessions.map(s => [s.id, s.name]));
 
     const bySession = Array.from(sessionMap.entries()).map(([sessionId, stats]) => ({
@@ -246,13 +288,16 @@ export class StatsService {
     }));
 
     // Top chats
-    const topChats = await this.messageRepo
-      .createQueryBuilder('m')
-      .select('m.chatId', 'chatId')
-      .addSelect('COUNT(*)', 'messageCount')
-      .addSelect('MAX(m.chatName)', 'chatName')
-      .where('m.createdAt >= :since', { since })
-      .groupBy('m.chatId')
+    const topChats = await this.scopeMessages(
+      this.messageRepo
+        .createQueryBuilder('m')
+        .select('m.chatId', 'chatId')
+        .addSelect('COUNT(*)', 'messageCount')
+        .addSelect('MAX(m.chatName)', 'chatName')
+        .where('m.createdAt >= :since', { since })
+        .groupBy('m.chatId'),
+      allowedSessions,
+    )
       // Order by the aggregate expression, not the "messageCount" alias: Postgres folds an unquoted
       // ORDER BY messageCount to lowercase and 42703s against the quoted alias (SQLite tolerated it).
       .orderBy('COUNT(*)', 'DESC')
@@ -357,20 +402,26 @@ export class StatsService {
     }
   }
 
-  private async getTimeSeries(since: Date, interval: 'hour' | 'day'): Promise<TimeSeriesPoint[]> {
+  private async getTimeSeries(
+    since: Date,
+    interval: 'hour' | 'day',
+    allowedSessions?: string[] | null,
+  ): Promise<TimeSeriesPoint[]> {
     // Alias the bucket as `bucket`, not `timestamp`: `timestamp` is a reserved type keyword in
     // PostgreSQL, so `GROUP BY timestamp` is not read as the output alias and the query 500s
     // ("column m.createdAt must appear in the GROUP BY"). SQLite tolerates it, hence the dialect-only
     // bug. The API field stays `timestamp` (mapped below).
-    const raw = await this.messageRepo
-      .createQueryBuilder('m')
-      .select(timeSeriesTimestampSql(this.dataDbType, interval), 'bucket')
-      .addSelect(`SUM(CASE WHEN m.direction = 'outgoing' THEN 1 ELSE 0 END)`, 'sent')
-      .addSelect(`SUM(CASE WHEN m.direction = 'incoming' THEN 1 ELSE 0 END)`, 'received')
-      .where('m.createdAt >= :since', { since })
-      .groupBy('bucket')
-      .orderBy('bucket', 'ASC')
-      .getRawMany<{ bucket: string; sent: string; received: string }>();
+    const raw = await this.scopeMessages(
+      this.messageRepo
+        .createQueryBuilder('m')
+        .select(timeSeriesTimestampSql(this.dataDbType, interval), 'bucket')
+        .addSelect(`SUM(CASE WHEN m.direction = 'outgoing' THEN 1 ELSE 0 END)`, 'sent')
+        .addSelect(`SUM(CASE WHEN m.direction = 'incoming' THEN 1 ELSE 0 END)`, 'received')
+        .where('m.createdAt >= :since', { since })
+        .groupBy('bucket')
+        .orderBy('bucket', 'ASC'),
+      allowedSessions,
+    ).getRawMany<{ bucket: string; sent: string; received: string }>();
 
     return raw.map(r => ({
       timestamp: r.bucket,
