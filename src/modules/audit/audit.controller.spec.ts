@@ -14,4 +14,10 @@ describe('AuditController access control', () => {
     const role = new Reflector().get<ApiKeyRole | undefined>(REQUIRED_ROLE_KEY, proto.findAll);
     expect(role).toBe(ApiKeyRole.ADMIN);
   });
+
+  it('DELETE /audit requires the ADMIN role', () => {
+    const proto = AuditController.prototype as unknown as Record<string, (...args: unknown[]) => unknown>;
+    const role = new Reflector().get<ApiKeyRole | undefined>(REQUIRED_ROLE_KEY, proto.clear);
+    expect(role).toBe(ApiKeyRole.ADMIN);
+  });
 });

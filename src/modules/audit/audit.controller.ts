@@ -1,4 +1,4 @@
-import { Controller, Get, Query } from '@nestjs/common';
+import { Controller, Get, Delete, Query } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiQuery } from '@nestjs/swagger';
 import { AuditListResponseDto } from './dto/audit-response.dto';
 import { AuditService, AuditQueryOptions } from './audit.service';
@@ -41,5 +41,19 @@ export class AuditController {
     // Scope to the calling key's allowedSessions so a session-restricted ADMIN key cannot read
     // another tenant's audit rows via the `sessionId` query param (which bypasses the guard fence).
     return this.auditService.findAll(options, apiKey?.allowedSessions);
+  }
+
+  @Delete()
+  @RequireRole(ApiKeyRole.ADMIN)
+  @ApiOperation({ summary: 'Delete audit logs older than N days (omit `days`, or pass 0, to delete all)' })
+  @ApiQuery({ name: 'days', required: false, type: Number })
+  @ApiResponse({ status: 200, description: 'Number of rows deleted' })
+  async clear(@Query('days') days?: string): Promise<{ deleted: number }> {
+    const parsed = days !== undefined ? Number.parseInt(days, 10) : 0;
+    const olderThanDays = Number.isInteger(parsed) && parsed >= 0 ? parsed : 0;
+    // cleanup() already exists for the scheduled retention prune (see AuditService.onModuleInit) —
+    // reused here as-is; olderThanDays=0 sets the cutoff to "now", which is every current row.
+    const deleted = await this.auditService.cleanup(olderThanDays);
+    return { deleted };
   }
 }
