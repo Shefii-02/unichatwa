@@ -22,9 +22,12 @@ export class InternalController {
     private readonly db: MysqlService,
   ) {}
 
+  // Fails CLOSED: an unset INTERNAL_API_KEY previously made this a silent no-op, leaving both
+  // endpoints below wide open with no credential required at all. EnvValidation now refuses to
+  // boot without this set, but the check stays defensive here too.
   private checkAuth(key: string | undefined): void {
-    const expected = process.env.INTERNAL_API_KEY || '';
-    if (expected && key !== expected) {
+    const expected = process.env.INTERNAL_API_KEY;
+    if (!expected || key !== expected) {
       throw new UnauthorizedException('Invalid internal key');
     }
   }
