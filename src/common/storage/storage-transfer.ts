@@ -134,8 +134,9 @@ export async function importFromStream(
       let entryBytes = 0;
       let entryAborted = false;
 
-      stream.on('data', (chunk: Buffer) => {
+      stream.on('data', (data: unknown) => {
         if (entryAborted || settled) return;
+        const chunk = data as Buffer;
         entryBytes += chunk.length;
         if (entryBytes > maxEntryBytes) {
           entryAborted = true;
