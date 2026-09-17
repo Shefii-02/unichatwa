@@ -756,7 +756,10 @@ describe('EventsGateway rate limiting', () => {
       process.env.WS_RATE_LIMIT_HANDSHAKE_MAX = '1';
       process.env.WS_RATE_LIMIT_HANDSHAKE_WINDOW_MS = '60000';
       jest.useFakeTimers();
-      authService.validateApiKey.mockRejectedValue(new Error('bad key'));
+      // A genuine UnauthorizedException, not a bare Error — the gateway now distinguishes a real
+      // credential rejection from an unexpected/transient failure (see EventsGateway.handleConnection),
+      // and this test wants to drive the window with an actually-bad key, not an ambiguous one.
+      authService.validateApiKey.mockRejectedValue(new UnauthorizedException('bad key'));
       const gw = buildGateway();
 
       await gw.handleConnection(asSocket(makeSock('a', { apiKey: 'good' })));

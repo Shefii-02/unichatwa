@@ -9,7 +9,7 @@ import {
   ConnectedSocket,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
-import { Logger, OnModuleDestroy } from '@nestjs/common';
+import { Logger, OnModuleDestroy, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AuthService } from '../auth/auth.service';
 import { AuditService } from '../audit/audit.service';
@@ -295,17 +295,34 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
       this.handshakeLimiter.refund(clientIp);
       this.logger.log(`Client connected: ${client.id} (key: ${validKey.name})`);
     } catch (error) {
-      this.logger.warn(`Client ${client.id} rejected: Auth error`, {
+      // validateApiKey throws UnauthorizedException for every GENUINE rejection (no such key,
+      // revoked, expired, IP not allowed, ...) — anything else here (a DB timeout or other
+      // transient failure on that shared-DB call) is NOT proof the key is invalid. The REST guard
+      // already gets this right: ApiKeyGuard.canActivate only audits+specially-handles
+      // Unauthorized/Forbidden and otherwise just rethrows, which Nest turns into a 500 that the
+      // caller can retry — it never tells the client its key is dead. This handler used to treat
+      // every failure identically ("Authentication failed"), which meant a transient blip here
+      // reported a perfectly valid, non-revoked key as invalid. A dashboard reacting to that by
+      // clearing its cached key — and someone then tapping "Reconnect", which mints a BRAND NEW
+      // key and REVOKES THE OLD ONE (WaChatTokenService::provision on the Laravel side) — could
+      // kick every other client sharing that same key off over nothing more than a blip.
+      const invalidKey = error instanceof UnauthorizedException;
+      this.logger.warn(`Client ${client.id} rejected: ${invalidKey ? 'Auth error' : 'Unexpected error during auth'}`, {
         error: error instanceof Error ? error.message : String(error),
       });
-      // Audit the rejected credential like the REST guard does, so probing over the WS surface leaves
-      // a forensic trail too. Fire-and-forget: audit logging must never affect the rejection path.
-      void this.auditService.logWarn(AuditAction.API_KEY_AUTH_FAILED, {
-        ipAddress: clientIp,
-        metadata: { surface: 'websocket' },
-        errorMessage: error instanceof Error ? error.message : String(error),
-      });
-      client.emit('message', this.createError('UNAUTHORIZED', 'Authentication failed'));
+      if (invalidKey) {
+        // Audit the rejected credential like the REST guard does, so probing over the WS surface
+        // leaves a forensic trail too. Fire-and-forget: audit logging must never affect the
+        // rejection path.
+        void this.auditService.logWarn(AuditAction.API_KEY_AUTH_FAILED, {
+          ipAddress: clientIp,
+          metadata: { surface: 'websocket' },
+          errorMessage: error instanceof Error ? error.message : String(error),
+        });
+        client.emit('message', this.createError('UNAUTHORIZED', 'Authentication failed'));
+      } else {
+        client.emit('message', this.createError('SERVER_ERROR', 'Could not validate API key, please retry'));
+      }
       client.disconnect();
     }
   }
@@ -367,10 +384,31 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
     // here too, not just at connect.
     const rawApiKey = (client.data as { rawApiKey?: string }).rawApiKey;
     const clientIp = this.resolveClientIp(client);
+
+    if (!rawApiKey) {
+      client.emit('message', this.createError('UNAUTHORIZED', 'API key is no longer valid', requestId));
+      client.disconnect();
+      return this.createError('UNAUTHORIZED', 'API key is no longer valid', requestId);
+    }
+
     let subscriberKey: { allowedSessions?: string[] | null } | null;
     try {
-      subscriberKey = rawApiKey ? await this.authService.validateApiKey(rawApiKey, clientIp) : null;
-    } catch {
+      // validateApiKey's contract never actually resolves null (it throws on every failure) — the
+      // null branch below is defensive, not a real path, in case that ever changes.
+      subscriberKey = await this.authService.validateApiKey(rawApiKey, clientIp);
+    } catch (error) {
+      if (!(error instanceof UnauthorizedException)) {
+        // Same distinction as handleConnection: only a genuine UnauthorizedException means the key
+        // itself is bad. Anything else (a DB timeout on this shared-DB call, etc.) is NOT proof of
+        // that — fail just this one subscribe attempt and let the client retry, rather than
+        // disconnecting the socket and telling it the key is dead. See handleConnection's fuller
+        // comment for why that false signal matters (it can trigger a reconnect that revokes the
+        // key for every OTHER client sharing it too).
+        this.logger.warn(`Subscribe re-validation hit an unexpected (non-auth) error for client ${client.id}`, {
+          error: error instanceof Error ? error.message : String(error),
+        });
+        return this.createError('SERVER_ERROR', 'Could not verify API key, please retry', requestId);
+      }
       subscriberKey = null;
     }
     if (!subscriberKey) {
