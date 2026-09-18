@@ -125,4 +125,29 @@ export class EngineRegistry {
   activeIds(): string[] {
     return [...new Set([...this.engines.keys(), ...this.initializing])];
   }
+
+  // ── Heavy-op contention flag ────────────────────────────────────────────
+  // Every whatsapp-web.js session in this process shares one Node event loop and CDP channel to
+  // Puppeteer. A heavy read like getChats() (SessionService.getChats) can serialize an entire chat
+  // list across that shared channel for multiple seconds, starving a *different* session's
+  // SessionLivenessWatchdog probe long enough to look dead — a real disconnect+reconnect caused by
+  // contention, not an actual fault. This process-wide counter (not per-session: the contention is
+  // process-wide, not scoped to the session doing the heavy read) lets the watchdog tell the two
+  // cases apart instead of striking a session for the crime of a sibling being read from.
+
+  private heavyOpsInFlight = 0;
+
+  /** Call before a heavy CDP-bound read; pair with `endHeavyOp()` in a `finally`. */
+  beginHeavyOp(): void {
+    this.heavyOpsInFlight++;
+  }
+
+  endHeavyOp(): void {
+    this.heavyOpsInFlight = Math.max(0, this.heavyOpsInFlight - 1);
+  }
+
+  /** True while any session in this process is mid-heavy-read. */
+  get isHeavyOpInFlight(): boolean {
+    return this.heavyOpsInFlight > 0;
+  }
 }

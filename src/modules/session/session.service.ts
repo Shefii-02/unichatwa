@@ -624,10 +624,20 @@ export class SessionService implements OnModuleDestroy, OnModuleInit, OnApplicat
     await this.findOne(id); // Verify session exists
     const engine = this.requireEngine(id);
 
-    // Most-recent first, then bound the response window. Sorting before the cap means a capped
-    // response is the N newest chats (what clients show first) rather than an arbitrary slice.
-    const chats = [...(await engine.getChats())].sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-    return paginate(chats, opts.limit, opts.offset);
+    // Flagged for SessionLivenessWatchdog's benefit (see EngineRegistry.beginHeavyOp): this is the
+    // heavy CDP-bound read that can starve a *different* session's liveness probe long enough to
+    // look dead. The flag is process-wide and covers every engine kind uniformly rather than only
+    // wwebjs — cheap to hold for an engine that doesn't share this contention (Baileys) and correct
+    // for the one that does.
+    this.engines.beginHeavyOp();
+    try {
+      // Most-recent first, then bound the response window. Sorting before the cap means a capped
+      // response is the N newest chats (what clients show first) rather than an arbitrary slice.
+      const chats = [...(await engine.getChats())].sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+      return paginate(chats, opts.limit, opts.offset);
+    } finally {
+      this.engines.endHeavyOp();
+    }
   }
 
   /**

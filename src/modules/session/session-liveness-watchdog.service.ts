@@ -143,6 +143,21 @@ export class SessionLivenessWatchdog {
       return;
     }
 
+    // A probe that fails while a heavy CDP read (getChats — see EngineRegistry.beginHeavyOp) is in
+    // flight for ANY session is contention, not evidence THIS session died: the whole process shares
+    // one event loop, and a multi-second chat-list dump can starve every other engine's probe long
+    // enough to look dead. Skip the strike entirely rather than let a session get disconnected and
+    // reconnected for the crime of a sibling session being read from during the same tick — the next
+    // tick (60s later) probes again, so a session that is actually dead still gets caught, just not
+    // necessarily on this exact tick.
+    if (this.engines.isHeavyOpInFlight) {
+      this.logger.debug('Liveness probe failed during a heavy read elsewhere; not counting it as a strike', {
+        sessionId: id,
+        action: 'watchdog_probe_failed_during_contention',
+      });
+      return;
+    }
+
     const failures = (this.failures.get(id) ?? 0) + 1;
     if (observeOnly) {
       this.failures.set(id, failures);
