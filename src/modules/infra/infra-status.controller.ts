@@ -249,7 +249,6 @@ export class InfraStatusController {
   }
 
   @Get('engines/current')
-  @RequireRole(ApiKeyRole.ADMIN)
   @ApiOperation({ summary: 'Get current active engine' })
   @ApiResponse({ status: 200, description: 'Current engine info', type: InfraCurrentEngineResponseDto })
   getCurrentEngine(): { engineType: string } {

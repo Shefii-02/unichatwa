@@ -35,6 +35,9 @@ describe('Infra controllers access control', () => {
   // the ADMIN role so that a low-privilege (VIEWER/OPERATOR) API key cannot wipe
   // data, read secrets, change config, restart, trigger storage import, or read
   // infrastructure status / engine / storage details (#221 tightened the reads).
+  // getCurrentEngine is deliberately NOT in this list: it returns only a non-sensitive
+  // `{ engineType }` and is read directly by tenant UI (chat/status compose) using the
+  // company's own scoped operator key, which is never ADMIN.
   const adminOnly = [
     [InfraConfigController, 'getConfig'], // GET  /infra/config (returns saved config; secrets omitted but still ADMIN-only)
     [InfraConfigController, 'saveConfig'], // PUT  /infra/config
@@ -45,7 +48,6 @@ describe('Infra controllers access control', () => {
     [InfraStorageController, 'importStorage'], // POST /infra/storage/import
     [InfraStatusController, 'getStatus'], // GET  /infra/status
     [InfraStatusController, 'getEngines'], // GET  /infra/engines
-    [InfraStatusController, 'getCurrentEngine'], // GET  /infra/engines/current
     [InfraStorageController, 'getStorageFileCount'], // GET  /infra/storage/files/count
   ] as const;
 
