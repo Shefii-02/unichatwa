@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException, Optional } from '@nestjs/common';
+import { Injectable, BadRequestException, HttpException, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, QueryDeepPartialEntity } from 'typeorm';
@@ -747,7 +747,17 @@ export class MessageSendService {
       this.logger.warn(`Outbound media fetch blocked by SSRF guard: ${error.message}`);
       return new BadRequestException(SSRF_BLOCKED_CLIENT_MESSAGE);
     }
-    return error;
+    // Any other thrown value already typed as an HttpException (e.g. getEngine's "session not
+    // active" 400) keeps its own status/message untouched. Anything else reaching here is a bare
+    // Error — a media fetch timeout, the receiver rejecting an unsupported file, a whatsapp-web.js/
+    // Baileys internal failure — which Nest's default filter treats as "unknown" and replaces with a
+    // content-free "Internal server error" 500, discarding the one thing the caller needs to fix
+    // their request. The bulk path (sanitizeBatchError) and the SSRF branch above already keep this
+    // text for their callers; a single/test send deserves the same instead of going opaque.
+    if (error instanceof HttpException) {
+      return error;
+    }
+    return new BadRequestException(error instanceof Error ? error.message : String(error));
   }
 
   private buildMediaInput(dto: SendMediaMessageDto): MediaInput {
