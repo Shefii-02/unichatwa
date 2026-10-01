@@ -27,15 +27,15 @@ export class NormalizeSynchronizeUuidColumns1770200000000 implements MigrationIn
   // connection (immune). lid_mappings/ingress_events/plugin_instances use a varchar @PrimaryColumn by
   // design — do NOT add them here.
   private readonly uuidPkTables = [
-    'sessions',
-    'webhooks',
-    'messages',
-    'message_batches',
-    'templates',
-    'baileys_stored_messages',
-    'webhook_delivery_failures',
-    'conversation_mappings',
-    'integration_delivery_failures',
+    'openwa_gw_sessions',
+    'openwa_gw_webhooks',
+    'openwa_gw_messages',
+    'openwa_gw_message_batches',
+    'openwa_gw_templates',
+    'openwa_gw_baileys_stored_messages',
+    'openwa_gw_webhook_delivery_failures',
+    'openwa_gw_conversation_mappings',
+    'openwa_gw_integration_delivery_failures',
   ];
 
   // The 3 @ManyToOne(() => Session) FK-bearing tables. `name` is the CANONICAL re-add name matching the
@@ -43,9 +43,9 @@ export class NormalizeSynchronizeUuidColumns1770200000000 implements MigrationIn
   // FK — this migration owns it). The DROP name is DISCOVERED at runtime: synchronize names constraints
   // with a TypeORM hash, not these canonical names.
   private readonly sessionFks = [
-    { table: 'webhooks', column: 'sessionId', name: 'FK_d209715bb62b12255e825580af6' },
-    { table: 'templates', column: 'sessionId', name: 'FK_templates_sessionId' },
-    { table: 'baileys_stored_messages', column: 'sessionId', name: 'FK_baileys_stored_messages_sessionId' },
+    { table: 'openwa_gw_webhooks', column: 'sessionId', name: 'FK_d209715bb62b12255e825580af6' },
+    { table: 'openwa_gw_templates', column: 'sessionId', name: 'FK_templates_sessionId' },
+    { table: 'openwa_gw_baileys_stored_messages', column: 'sessionId', name: 'FK_baileys_stored_messages_sessionId' },
   ];
 
   public async up(queryRunner: QueryRunner): Promise<void> {
@@ -53,7 +53,7 @@ export class NormalizeSynchronizeUuidColumns1770200000000 implements MigrationIn
     // Gate: synchronize builds the WHOLE schema atomically (all-uuid, or synchronize itself errors), so a
     // single representative probe on sessions.id is sufficient to detect a drifted schema. Per-column
     // guards inside the loops below add defense-in-depth for the (non-reachable) partial-drift case.
-    if (!(await this.columnIsUuid(queryRunner, 'sessions', 'id'))) return;
+    if (!(await this.columnIsUuid(queryRunner, 'openwa_gw_sessions', 'id'))) return;
 
     await queryRunner.query(`SET LOCAL statement_timeout = 0`);
     await this.ensureGenRandomUuid(queryRunner);
@@ -61,7 +61,7 @@ export class NormalizeSynchronizeUuidColumns1770200000000 implements MigrationIn
     // 1. Drop FKs referencing sessions(id) FIRST — a uuid FK blocks ALTER of the referenced PK.
     for (const fk of this.sessionFks) {
       if (!(await queryRunner.hasTable(fk.table))) continue;
-      for (const c of await this.fkConstraintNames(queryRunner, fk.table, fk.column, 'sessions')) {
+      for (const c of await this.fkConstraintNames(queryRunner, fk.table, fk.column, 'openwa_gw_sessions')) {
         await queryRunner.query(`ALTER TABLE "${fk.table}" DROP CONSTRAINT IF EXISTS "${c}"`);
       }
     }
@@ -89,7 +89,7 @@ export class NormalizeSynchronizeUuidColumns1770200000000 implements MigrationIn
       if (!(await queryRunner.hasTable(fk.table))) continue;
       await queryRunner.query(
         `ALTER TABLE "${fk.table}" ADD CONSTRAINT "${fk.name}" ` +
-          `FOREIGN KEY ("${fk.column}") REFERENCES "sessions" ("id") ON DELETE CASCADE ON UPDATE NO ACTION`,
+          `FOREIGN KEY ("${fk.column}") REFERENCES "openwa_gw_sessions" ("id") ON DELETE CASCADE ON UPDATE NO ACTION`,
       );
     }
 
@@ -105,7 +105,7 @@ export class NormalizeSynchronizeUuidColumns1770200000000 implements MigrationIn
     // Best-effort inverse (varchar -> native uuid); only meaningful to re-enable synchronize. USING id::uuid
     // validates every value — Postgres aborts on non-uuid strings (no silent corruption).
     if (queryRunner.dataSource.options.type !== 'postgres') return;
-    if (await this.columnIsUuid(queryRunner, 'sessions', 'id')) return; // already native uuid: nothing to revert
+    if (await this.columnIsUuid(queryRunner, 'openwa_gw_sessions', 'id')) return; // already native uuid: nothing to revert
 
     await queryRunner.query(`SET LOCAL statement_timeout = 0`);
     await this.ensureGenRandomUuid(queryRunner);
@@ -113,7 +113,7 @@ export class NormalizeSynchronizeUuidColumns1770200000000 implements MigrationIn
     // Drop FKs (discovered, same as up — robust to either hash or canonical names).
     for (const fk of this.sessionFks) {
       if (!(await queryRunner.hasTable(fk.table))) continue;
-      for (const c of await this.fkConstraintNames(queryRunner, fk.table, fk.column, 'sessions')) {
+      for (const c of await this.fkConstraintNames(queryRunner, fk.table, fk.column, 'openwa_gw_sessions')) {
         await queryRunner.query(`ALTER TABLE "${fk.table}" DROP CONSTRAINT IF EXISTS "${c}"`);
       }
     }
@@ -135,7 +135,7 @@ export class NormalizeSynchronizeUuidColumns1770200000000 implements MigrationIn
       if (!(await queryRunner.hasTable(fk.table))) continue;
       await queryRunner.query(
         `ALTER TABLE "${fk.table}" ADD CONSTRAINT "${fk.name}" ` +
-          `FOREIGN KEY ("${fk.column}") REFERENCES "sessions" ("id") ON DELETE CASCADE ON UPDATE NO ACTION`,
+          `FOREIGN KEY ("${fk.column}") REFERENCES "openwa_gw_sessions" ("id") ON DELETE CASCADE ON UPDATE NO ACTION`,
       );
     }
 

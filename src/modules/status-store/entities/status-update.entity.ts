@@ -1,7 +1,7 @@
 import { Column, Entity, Index, PrimaryGeneratedColumn } from 'typeorm';
 import { bigintToNumberTransformer } from '../../message/entities/message.entity';
 
-@Entity('status_updates')
+@Entity('openwa_gw_status_updates')
 @Index(['sessionId', 'contactJid'])
 @Index(['sessionId', 'waStatusId'], { unique: true })
 export class StatusUpdate {

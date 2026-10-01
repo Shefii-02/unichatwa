@@ -27,7 +27,7 @@ export class AddMessagesCreatedAtIndex1785123853000 implements MigrationInterfac
     if (queryRunner.dataSource.options.type === 'postgres') {
       await queryRunner.query('SET LOCAL statement_timeout = 0');
     }
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "IDX_messages_createdAt" ON "messages" ("createdAt")`);
+    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "IDX_messages_createdAt" ON "openwa_gw_messages" ("createdAt")`);
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {

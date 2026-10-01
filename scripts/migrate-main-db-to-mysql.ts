@@ -66,14 +66,14 @@ async function main() {
     password,
     database,
     entities: [ApiKey, AuditLog],
-    synchronize: true, // creates api_keys/audit_logs tables matching the entities exactly
+    synchronize: true, // creates openwa_gw_api_keys/openwa_gw_audit_logs tables matching the entities exactly
     logging: false,
   });
   await mysql.initialize();
   console.log('MySQL schema ready (synchronized)');
 
-  const existingKeys = await mysql.query('SELECT COUNT(*) c FROM api_keys');
-  const existingLogs = await mysql.query('SELECT COUNT(*) c FROM audit_logs');
+  const existingKeys = await mysql.query('SELECT COUNT(*) c FROM openwa_gw_api_keys');
+  const existingLogs = await mysql.query('SELECT COUNT(*) c FROM openwa_gw_audit_logs');
   if (!force && (Number(existingKeys[0].c) > 0 || Number(existingLogs[0].c) > 0)) {
     await mysql.destroy();
     throw new Error(
@@ -88,7 +88,7 @@ async function main() {
   try {
     for (const row of apiKeyRows) {
       await runner.query(
-        `INSERT INTO api_keys (id, name, keyHash, keyPrefix, role, allowedIps, allowedSessions, isActive, expiresAt, lastUsedAt, usageCount, createdAt, updatedAt)
+        `INSERT INTO openwa_gw_api_keys (id, name, keyHash, keyPrefix, role, allowedIps, allowedSessions, isActive, expiresAt, lastUsedAt, usageCount, createdAt, updatedAt)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           row.id,
@@ -109,7 +109,7 @@ async function main() {
     }
     for (const row of auditLogRows) {
       await runner.query(
-        `INSERT INTO audit_logs (id, action, severity, apiKeyId, apiKeyName, sessionId, sessionName, ipAddress, userAgent, method, path, statusCode, metadata, errorMessage, createdAt)
+        `INSERT INTO openwa_gw_audit_logs (id, action, severity, apiKeyId, apiKeyName, sessionId, sessionName, ipAddress, userAgent, method, path, statusCode, metadata, errorMessage, createdAt)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           row.id,
@@ -138,8 +138,8 @@ async function main() {
     await runner.release();
   }
 
-  const finalKeys = await mysql.query('SELECT COUNT(*) c FROM api_keys');
-  const finalLogs = await mysql.query('SELECT COUNT(*) c FROM audit_logs');
+  const finalKeys = await mysql.query('SELECT COUNT(*) c FROM openwa_gw_api_keys');
+  const finalLogs = await mysql.query('SELECT COUNT(*) c FROM openwa_gw_audit_logs');
   console.log(`MySQL now has: ${finalKeys[0].c} api_keys, ${finalLogs[0].c} audit_logs`);
   console.log('Done. Now set MAIN_DATABASE_TYPE=mysql (and the MAIN_DATABASE_* vars above) in .env and restart the app.');
 

@@ -23,11 +23,11 @@ export class SlimIngressEventPayload1785600000000 implements MigrationInterface 
     if (queryRunner.connection.options.type === 'postgres') {
       const rows = (await queryRunner.query(
         `SELECT 1 FROM information_schema.columns
-         WHERE table_schema = current_schema() AND table_name = 'ingress_events' AND column_name = '${name}'`,
+         WHERE table_schema = current_schema() AND table_name = 'openwa_gw_ingress_events' AND column_name = '${name}'`,
       )) as unknown[];
       return rows.length > 0;
     }
-    const rows = (await queryRunner.query(`PRAGMA table_info("ingress_events")`)) as Array<{ name: string }>;
+    const rows = (await queryRunner.query(`PRAGMA table_info("openwa_gw_ingress_events")`)) as Array<{ name: string }>;
     return rows.some(r => r.name === name);
   }
 
@@ -35,11 +35,11 @@ export class SlimIngressEventPayload1785600000000 implements MigrationInterface 
     if (queryRunner.connection.options.type === 'postgres') {
       const rows = (await queryRunner.query(
         `SELECT is_nullable FROM information_schema.columns
-         WHERE table_schema = current_schema() AND table_name = 'ingress_events' AND column_name = 'payload'`,
+         WHERE table_schema = current_schema() AND table_name = 'openwa_gw_ingress_events' AND column_name = 'payload'`,
       )) as Array<{ is_nullable: string }>;
       return rows[0]?.is_nullable === 'YES';
     }
-    const rows = (await queryRunner.query(`PRAGMA table_info("ingress_events")`)) as Array<{
+    const rows = (await queryRunner.query(`PRAGMA table_info("openwa_gw_ingress_events")`)) as Array<{
       name: string;
       notnull: number;
     }>;
@@ -50,7 +50,7 @@ export class SlimIngressEventPayload1785600000000 implements MigrationInterface 
   // Retire the payload of every row the reconciler can never replay. Idempotent by nature.
   private async retireNonPendingPayloads(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(
-      `UPDATE "ingress_events" SET "payload" = NULL WHERE "dispatchState" IS NULL OR "dispatchState" <> 'pending'`,
+      `UPDATE "openwa_gw_ingress_events" SET "payload" = NULL WHERE "dispatchState" IS NULL OR "dispatchState" <> 'pending'`,
     );
   }
 
@@ -59,9 +59,9 @@ export class SlimIngressEventPayload1785600000000 implements MigrationInterface 
     if (await this.hasColumn(queryRunner, 'payloadHash')) return; // already applied (or sync-built)
 
     if (isPostgres) {
-      await queryRunner.query(`ALTER TABLE "ingress_events" ADD COLUMN "payloadHash" varchar NULL`);
+      await queryRunner.query(`ALTER TABLE "openwa_gw_ingress_events" ADD COLUMN "payloadHash" varchar NULL`);
       if (!(await this.isPayloadNullable(queryRunner))) {
-        await queryRunner.query(`ALTER TABLE "ingress_events" ALTER COLUMN "payload" DROP NOT NULL`);
+        await queryRunner.query(`ALTER TABLE "openwa_gw_ingress_events" ALTER COLUMN "payload" DROP NOT NULL`);
       }
       await this.retireNonPendingPayloads(queryRunner);
       return;
@@ -81,16 +81,16 @@ export class SlimIngressEventPayload1785600000000 implements MigrationInterface 
       `INSERT INTO "ingress_events_new" ("id","instanceId","pluginId","providerDeliveryId","route","payload","payloadHash","sessionId","dispatchState","dispatchAttempts","lastDispatchAt","createdAt") ` +
         `SELECT "id","instanceId","pluginId","providerDeliveryId","route",` +
         ` CASE WHEN "dispatchState" = 'pending' THEN "payload" ELSE NULL END,` +
-        ` NULL,"sessionId","dispatchState","dispatchAttempts","lastDispatchAt","createdAt" FROM "ingress_events"`,
+        ` NULL,"sessionId","dispatchState","dispatchAttempts","lastDispatchAt","createdAt" FROM "openwa_gw_ingress_events"`,
     );
-    await queryRunner.query(`DROP TABLE "ingress_events"`);
-    await queryRunner.query(`ALTER TABLE "ingress_events_new" RENAME TO "ingress_events"`);
+    await queryRunner.query(`DROP TABLE "openwa_gw_ingress_events"`);
+    await queryRunner.query(`ALTER TABLE "ingress_events_new" RENAME TO "openwa_gw_ingress_events"`);
     await queryRunner.query(
-      `CREATE UNIQUE INDEX "UQ_ingress_events_instance_delivery" ON "ingress_events" ("pluginId", "instanceId", "providerDeliveryId")`,
+      `CREATE UNIQUE INDEX "UQ_ingress_events_instance_delivery" ON "openwa_gw_ingress_events" ("pluginId", "instanceId", "providerDeliveryId")`,
     );
-    await queryRunner.query(`CREATE INDEX "IDX_ingress_events_createdAt" ON "ingress_events" ("createdAt")`);
+    await queryRunner.query(`CREATE INDEX "IDX_ingress_events_createdAt" ON "openwa_gw_ingress_events" ("createdAt")`);
     await queryRunner.query(
-      `CREATE INDEX "IDX_ingress_events_dispatchState" ON "ingress_events" ("dispatchState", "createdAt")`,
+      `CREATE INDEX "IDX_ingress_events_dispatchState" ON "openwa_gw_ingress_events" ("dispatchState", "createdAt")`,
     );
   }
 
@@ -101,9 +101,9 @@ export class SlimIngressEventPayload1785600000000 implements MigrationInterface 
     // Rows whose payload was retired get an empty-payload tombstone so NOT NULL can be restored.
     const tombstone = '{"headers":{},"query":{},"body":"","rawBody":""}';
     if (isPostgres) {
-      await queryRunner.query(`UPDATE "ingress_events" SET "payload" = '${tombstone}' WHERE "payload" IS NULL`);
-      await queryRunner.query(`ALTER TABLE "ingress_events" ALTER COLUMN "payload" SET NOT NULL`);
-      await queryRunner.query(`ALTER TABLE "ingress_events" DROP COLUMN "payloadHash"`);
+      await queryRunner.query(`UPDATE "openwa_gw_ingress_events" SET "payload" = '${tombstone}' WHERE "payload" IS NULL`);
+      await queryRunner.query(`ALTER TABLE "openwa_gw_ingress_events" ALTER COLUMN "payload" SET NOT NULL`);
+      await queryRunner.query(`ALTER TABLE "openwa_gw_ingress_events" DROP COLUMN "payloadHash"`);
       return;
     }
 
@@ -119,16 +119,16 @@ export class SlimIngressEventPayload1785600000000 implements MigrationInterface 
       `INSERT INTO "ingress_events_old" ("id","instanceId","pluginId","providerDeliveryId","route","payload","sessionId","dispatchState","dispatchAttempts","lastDispatchAt","createdAt") ` +
         `SELECT "id","instanceId","pluginId","providerDeliveryId","route",` +
         ` COALESCE("payload", '${tombstone}'),` +
-        ` "sessionId","dispatchState","dispatchAttempts","lastDispatchAt","createdAt" FROM "ingress_events"`,
+        ` "sessionId","dispatchState","dispatchAttempts","lastDispatchAt","createdAt" FROM "openwa_gw_ingress_events"`,
     );
-    await queryRunner.query(`DROP TABLE "ingress_events"`);
-    await queryRunner.query(`ALTER TABLE "ingress_events_old" RENAME TO "ingress_events"`);
+    await queryRunner.query(`DROP TABLE "openwa_gw_ingress_events"`);
+    await queryRunner.query(`ALTER TABLE "ingress_events_old" RENAME TO "openwa_gw_ingress_events"`);
     await queryRunner.query(
-      `CREATE UNIQUE INDEX "UQ_ingress_events_instance_delivery" ON "ingress_events" ("pluginId", "instanceId", "providerDeliveryId")`,
+      `CREATE UNIQUE INDEX "UQ_ingress_events_instance_delivery" ON "openwa_gw_ingress_events" ("pluginId", "instanceId", "providerDeliveryId")`,
     );
-    await queryRunner.query(`CREATE INDEX "IDX_ingress_events_createdAt" ON "ingress_events" ("createdAt")`);
+    await queryRunner.query(`CREATE INDEX "IDX_ingress_events_createdAt" ON "openwa_gw_ingress_events" ("createdAt")`);
     await queryRunner.query(
-      `CREATE INDEX "IDX_ingress_events_dispatchState" ON "ingress_events" ("dispatchState", "createdAt")`,
+      `CREATE INDEX "IDX_ingress_events_dispatchState" ON "openwa_gw_ingress_events" ("dispatchState", "createdAt")`,
     );
   }
 }

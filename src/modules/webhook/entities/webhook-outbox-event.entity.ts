@@ -28,7 +28,7 @@ export type WebhookOutboxState = 'pending' | 'dispatched' | 'failed';
  * names one delivery attempt-set exactly, and a replay reuses the STORED key rather than deriving a
  * new one, which is what keeps a redelivery deduplicable at the receiver.
  */
-@Entity('webhook_outbox_events')
+@Entity('openwa_gw_webhook_outbox_events')
 @Index('UQ_webhook_outbox_events_webhook_key', ['webhookId', 'idempotencyKey'], { unique: true })
 @Index('IDX_webhook_outbox_events_state_createdAt', ['state', 'createdAt'])
 export class WebhookOutboxEvent {

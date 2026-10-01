@@ -3,7 +3,7 @@ import { jsonColumn } from '../../../common/utils/column-types';
 
 // One configured instance of an adapter plugin (e.g. one Chatwoot account). instanceId is namespaced
 // under pluginId; NOT a separate worker. Secret is host-minted and masked-on-read.
-@Entity('plugin_instances')
+@Entity('openwa_gw_plugin_instances')
 @Index('UQ_plugin_instances_plugin_instance', ['pluginId', 'instanceId'], { unique: true })
 export class PluginInstance {
   @PrimaryColumn()

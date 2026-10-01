@@ -15,7 +15,7 @@ export class CreateStatusUpdates1784822470680 implements MigrationInterface {
   name = 'CreateStatusUpdates1784822470680';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
-    if (await queryRunner.hasTable('status_updates')) return;
+    if (await queryRunner.hasTable('openwa_gw_status_updates')) return;
 
     const isPostgres = queryRunner.dataSource.options.type === 'postgres';
     const boolFalse = isPostgres ? 'false' : '0';
@@ -24,7 +24,7 @@ export class CreateStatusUpdates1784822470680 implements MigrationInterface {
       : `"id" varchar PRIMARY KEY NOT NULL`;
 
     await queryRunner.query(
-      `CREATE TABLE "status_updates" (` +
+      `CREATE TABLE "openwa_gw_status_updates" (` +
         `${idColumn}, "sessionId" varchar NOT NULL, "contactJid" varchar NOT NULL, ` +
         `"contactName" varchar, "contactPushName" varchar, "waStatusId" varchar NOT NULL, "type" varchar NOT NULL, ` +
         `"caption" text, "mediaPath" varchar, "mediaMimetype" varchar, ` +
@@ -32,18 +32,18 @@ export class CreateStatusUpdates1784822470680 implements MigrationInterface {
         `"font" integer, "postedAt" bigint NOT NULL, "expiresAt" bigint NOT NULL)`,
     );
     await queryRunner.query(
-      `CREATE INDEX "IDX_status_updates_sessionId_contactJid" ON "status_updates" ("sessionId", "contactJid")`,
+      `CREATE INDEX "IDX_status_updates_sessionId_contactJid" ON "openwa_gw_status_updates" ("sessionId", "contactJid")`,
     );
     await queryRunner.query(
-      `CREATE UNIQUE INDEX "UQ_status_updates_sessionId_waStatusId" ON "status_updates" ("sessionId", "waStatusId")`,
+      `CREATE UNIQUE INDEX "UQ_status_updates_sessionId_waStatusId" ON "openwa_gw_status_updates" ("sessionId", "waStatusId")`,
     );
-    await queryRunner.query(`CREATE INDEX "IDX_status_updates_expiresAt" ON "status_updates" ("expiresAt")`);
+    await queryRunner.query(`CREATE INDEX "IDX_status_updates_expiresAt" ON "openwa_gw_status_updates" ("expiresAt")`);
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`DROP INDEX IF EXISTS "IDX_status_updates_expiresAt"`);
     await queryRunner.query(`DROP INDEX IF EXISTS "UQ_status_updates_sessionId_waStatusId"`);
     await queryRunner.query(`DROP INDEX IF EXISTS "IDX_status_updates_sessionId_contactJid"`);
-    await queryRunner.query(`DROP TABLE IF EXISTS "status_updates"`);
+    await queryRunner.query(`DROP TABLE IF EXISTS "openwa_gw_status_updates"`);
   }
 }

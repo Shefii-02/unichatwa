@@ -36,7 +36,7 @@ export interface BatchProgress {
   cancelled: number;
 }
 
-@Entity('message_batches')
+@Entity('openwa_gw_message_batches')
 // Uniqueness is scoped to the session, not global: one session can't deny a batch id to another.
 // Migration 1781800000000 carries the same constraint on existing databases.
 @Unique('UQ_message_batches_session_id_batch_id', ['sessionId', 'batchId'])

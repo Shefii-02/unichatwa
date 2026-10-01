@@ -14,7 +14,7 @@ export enum SessionStatus {
   FAILED = 'failed',
 }
 
-@Entity('sessions')
+@Entity('openwa_gw_sessions')
 export class Session {
   @PrimaryGeneratedColumn('uuid')
   id!: string;

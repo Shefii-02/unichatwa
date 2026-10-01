@@ -12,12 +12,12 @@ export class AddWebhookFilters1781500000000 implements MigrationInterface {
   name = 'AddWebhookFilters1781500000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
-    if (await queryRunner.hasColumn('webhooks', 'filters')) return;
-    await queryRunner.query(`ALTER TABLE "webhooks" ADD COLUMN "filters" text`);
+    if (await queryRunner.hasColumn('openwa_gw_webhooks', 'filters')) return;
+    await queryRunner.query(`ALTER TABLE "openwa_gw_webhooks" ADD COLUMN "filters" text`);
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    if (!(await queryRunner.hasColumn('webhooks', 'filters'))) return;
-    await queryRunner.query(`ALTER TABLE "webhooks" DROP COLUMN "filters"`);
+    if (!(await queryRunner.hasColumn('openwa_gw_webhooks', 'filters'))) return;
+    await queryRunner.query(`ALTER TABLE "openwa_gw_webhooks" DROP COLUMN "filters"`);
   }
 }

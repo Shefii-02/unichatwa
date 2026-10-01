@@ -6,7 +6,7 @@ export enum ApiKeyRole {
   VIEWER = 'viewer',
 }
 
-@Entity('api_keys')
+@Entity('openwa_gw_api_keys')
 export class ApiKey {
   @PrimaryGeneratedColumn('uuid')
   id!: string;

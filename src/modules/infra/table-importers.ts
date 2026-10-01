@@ -61,7 +61,7 @@ export const TABLE_IMPORTERS: AnyTableImporter[] = [
   defineTableImporter({
     key: 'sessions',
     label: 'session',
-    sql: `INSERT INTO sessions (id, name, status, phone, "pushName", config, "proxyUrl", "proxyType", "connectedAt", "lastActiveAt", "createdAt", "updatedAt") 
+    sql: `INSERT INTO openwa_gw_sessions (id, name, status, phone, "pushName", config, "proxyUrl", "proxyType", "connectedAt", "lastActiveAt", "createdAt", "updatedAt") 
                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
     id: (session: SessionRow) => session.id,
     // A session name becomes the engine auth-directory key, so an unvalidated imported name (this
@@ -91,7 +91,7 @@ export const TABLE_IMPORTERS: AnyTableImporter[] = [
   defineTableImporter({
     key: 'webhooks',
     label: 'webhook',
-    sql: `INSERT INTO webhooks (id, "sessionId", url, events, secret, headers, filters, active, "retryCount", "lastTriggeredAt", "createdAt", "updatedAt")
+    sql: `INSERT INTO openwa_gw_webhooks (id, "sessionId", url, events, secret, headers, filters, active, "retryCount", "lastTriggeredAt", "createdAt", "updatedAt")
                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
     id: (webhook: WebhookRow) => webhook.id,
     map: (webhook: WebhookRow) => [
@@ -120,7 +120,7 @@ export const TABLE_IMPORTERS: AnyTableImporter[] = [
   defineTableImporter({
     key: 'messages',
     label: 'message',
-    sql: `INSERT INTO messages (id, "sessionId", "waMessageId", "chatId", "chatName", author, "from", "to", body, type, direction, "timestamp", metadata, status, "createdAt", "mediaPath", "mediaMimetype")
+    sql: `INSERT INTO openwa_gw_messages (id, "sessionId", "waMessageId", "chatId", "chatName", author, "from", "to", body, type, direction, "timestamp", metadata, status, "createdAt", "mediaPath", "mediaMimetype")
                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`,
     id: (msg: MessageRow) => msg.id,
     map: (msg: MessageRow) => [
@@ -153,7 +153,7 @@ export const TABLE_IMPORTERS: AnyTableImporter[] = [
   defineTableImporter({
     key: 'messageBatches',
     label: 'message batch',
-    sql: `INSERT INTO message_batches (id, batch_id, session_id, status, messages, options, progress, results, current_index, created_at, updated_at, started_at, completed_at)
+    sql: `INSERT INTO openwa_gw_message_batches (id, batch_id, session_id, status, messages, options, progress, results, current_index, created_at, updated_at, started_at, completed_at)
                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
     id: (batch: MessageBatchRow) => batch.id,
     map: (batch: MessageBatchRow) => [
@@ -181,7 +181,7 @@ export const TABLE_IMPORTERS: AnyTableImporter[] = [
   defineTableImporter({
     key: 'templates',
     label: 'template',
-    sql: `INSERT INTO templates (id, "sessionId", name, body, header, footer, "createdAt", "updatedAt")
+    sql: `INSERT INTO openwa_gw_templates (id, "sessionId", name, body, header, footer, "createdAt", "updatedAt")
                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
     id: (tpl: TemplateRow) => tpl.id,
     map: (tpl: TemplateRow) => [
@@ -200,7 +200,7 @@ export const TABLE_IMPORTERS: AnyTableImporter[] = [
   defineTableImporter({
     key: 'baileysStoredMessages',
     label: 'baileys stored message',
-    sql: `INSERT INTO baileys_stored_messages (id, "sessionId", "waMessageId", "serializedMessage", "createdAt")
+    sql: `INSERT INTO openwa_gw_baileys_stored_messages (id, "sessionId", "waMessageId", "serializedMessage", "createdAt")
                VALUES ($1, $2, $3, $4, $5)`,
     id: (bsm: BaileysStoredMessageRow) => bsm.id,
     map: (bsm: BaileysStoredMessageRow) => [
@@ -216,7 +216,7 @@ export const TABLE_IMPORTERS: AnyTableImporter[] = [
   defineTableImporter({
     key: 'lidMappings',
     label: 'lid mapping',
-    sql: `INSERT INTO lid_mappings (lid, phone, "sessionId", "updatedAt") VALUES ($1, $2, $3, $4)`,
+    sql: `INSERT INTO openwa_gw_lid_mappings (lid, phone, "sessionId", "updatedAt") VALUES ($1, $2, $3, $4)`,
     id: (lm: LidMappingRow) => lm.lid,
     map: (lm: LidMappingRow) => [lm.lid, lm.phone ?? null, lm.sessionId ?? null, lm.updatedAt],
   }),
@@ -225,7 +225,7 @@ export const TABLE_IMPORTERS: AnyTableImporter[] = [
   defineTableImporter({
     key: 'pluginInstances',
     label: 'plugin instance',
-    sql: `INSERT INTO plugin_instances (id, "pluginId", "instanceId", "sessionScope", secret, "verifyToken", config, enabled, "createdAt", "updatedAt")
+    sql: `INSERT INTO openwa_gw_plugin_instances (id, "pluginId", "instanceId", "sessionScope", secret, "verifyToken", config, enabled, "createdAt", "updatedAt")
                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
     id: (pi: PluginInstanceRow) => pi.id,
     map: (pi: PluginInstanceRow) => [
@@ -246,7 +246,7 @@ export const TABLE_IMPORTERS: AnyTableImporter[] = [
   defineTableImporter({
     key: 'conversationMappings',
     label: 'conversation mapping',
-    sql: `INSERT INTO conversation_mappings (id, "sessionId", "chatId", "pluginId", "instanceId", "providerConversationId", "handoverState", metadata, "updatedAt")
+    sql: `INSERT INTO openwa_gw_conversation_mappings (id, "sessionId", "chatId", "pluginId", "instanceId", "providerConversationId", "handoverState", metadata, "updatedAt")
                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
     id: (cm: ConversationMappingRow) => cm.id,
     map: (cm: ConversationMappingRow) => [
@@ -270,7 +270,7 @@ export const TABLE_IMPORTERS: AnyTableImporter[] = [
   defineTableImporter({
     key: 'ingressEvents',
     label: 'ingress event',
-    sql: `INSERT INTO ingress_events (id, "instanceId", "pluginId", "providerDeliveryId", route, payload, "payloadHash", "sessionId", "dispatchState", "dispatchAttempts", "lastDispatchAt", "createdAt")
+    sql: `INSERT INTO openwa_gw_ingress_events (id, "instanceId", "pluginId", "providerDeliveryId", route, payload, "payloadHash", "sessionId", "dispatchState", "dispatchAttempts", "lastDispatchAt", "createdAt")
                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
     id: (ie: IngressEventRow) => ie.id,
     map: (ie: IngressEventRow) => [
@@ -295,7 +295,7 @@ export const TABLE_IMPORTERS: AnyTableImporter[] = [
   defineTableImporter({
     key: 'webhookDeliveryFailures',
     label: 'webhook delivery failure',
-    sql: `INSERT INTO webhook_delivery_failures (id, "webhookId", "sessionId", event, url, "idempotencyKey", "deliveryId", attempts, "lastStatusCode", "lastError", "createdAt")
+    sql: `INSERT INTO openwa_gw_webhook_delivery_failures (id, "webhookId", "sessionId", event, url, "idempotencyKey", "deliveryId", attempts, "lastStatusCode", "lastError", "createdAt")
                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
     id: (wf: WebhookDeliveryFailureRow) => wf.id,
     map: (wf: WebhookDeliveryFailureRow) => [
@@ -319,7 +319,7 @@ export const TABLE_IMPORTERS: AnyTableImporter[] = [
   defineTableImporter({
     key: 'webhookOutboxEvents',
     label: 'webhook outbox event',
-    sql: `INSERT INTO webhook_outbox_events (id, "webhookId", "sessionId", event, "idempotencyKey", "deliveryId", payload, state, attempts, "lastAttemptAt", "createdAt")
+    sql: `INSERT INTO openwa_gw_webhook_outbox_events (id, "webhookId", "sessionId", event, "idempotencyKey", "deliveryId", payload, state, attempts, "lastAttemptAt", "createdAt")
                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
     id: (row: WebhookOutboxEventRow) => row.id,
     map: (row: WebhookOutboxEventRow) => [
@@ -341,7 +341,7 @@ export const TABLE_IMPORTERS: AnyTableImporter[] = [
   defineTableImporter({
     key: 'integrationDeliveryFailures',
     label: 'integration delivery failure',
-    sql: `INSERT INTO integration_delivery_failures (id, direction, "pluginId", "instanceId", "sessionId", "deliveryId", attempts, "lastError", payload, redriven, "createdAt")
+    sql: `INSERT INTO openwa_gw_integration_delivery_failures (id, direction, "pluginId", "instanceId", "sessionId", "deliveryId", attempts, "lastError", payload, redriven, "createdAt")
                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
     id: (df: IntegrationDeliveryFailureRow) => df.id,
     map: (df: IntegrationDeliveryFailureRow) => [
@@ -363,7 +363,7 @@ export const TABLE_IMPORTERS: AnyTableImporter[] = [
   defineTableImporter({
     key: 'statusUpdates',
     label: 'status update',
-    sql: `INSERT INTO status_updates (id, "sessionId", "contactJid", "contactName", "contactPushName", "waStatusId", type, caption, "mediaPath", "mediaMimetype", "mediaOmitted", "omitReason", "backgroundColor", font, "postedAt", "expiresAt")
+    sql: `INSERT INTO openwa_gw_status_updates (id, "sessionId", "contactJid", "contactName", "contactPushName", "waStatusId", type, caption, "mediaPath", "mediaMimetype", "mediaOmitted", "omitReason", "backgroundColor", font, "postedAt", "expiresAt")
                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`,
     id: (su: StatusUpdateRow) => su.id,
     map: (su: StatusUpdateRow) => [
@@ -391,7 +391,7 @@ export const TABLE_IMPORTERS: AnyTableImporter[] = [
   defineTableImporter({
     key: 'automationRules',
     label: 'automation rule',
-    sql: `INSERT INTO automation_rules (id, "sessionId", name, enabled, conditions, "replyText", "cooldownSeconds", "createdAt", "updatedAt")
+    sql: `INSERT INTO openwa_gw_automation_rules (id, "sessionId", name, enabled, conditions, "replyText", "cooldownSeconds", "createdAt", "updatedAt")
                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
     id: (rule: AutomationRuleRow) => rule.id,
     map: (rule: AutomationRuleRow) => [

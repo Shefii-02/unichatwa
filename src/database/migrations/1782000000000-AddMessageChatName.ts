@@ -12,17 +12,17 @@ export class AddMessageChatName1782000000000 implements MigrationInterface {
   name = 'AddMessageChatName1782000000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
-    const table = await queryRunner.getTable('messages');
+    const table = await queryRunner.getTable('openwa_gw_messages');
     const col = table?.findColumnByName('chatName');
     if (col) return; // already added by synchronize or a previous run
 
-    await queryRunner.query(`ALTER TABLE "messages" ADD COLUMN "chatName" varchar NULL`);
+    await queryRunner.query(`ALTER TABLE "openwa_gw_messages" ADD COLUMN "chatName" varchar NULL`);
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    const table = await queryRunner.getTable('messages');
+    const table = await queryRunner.getTable('openwa_gw_messages');
     const col = table?.findColumnByName('chatName');
     if (!col) return;
-    await queryRunner.query(`ALTER TABLE "messages" DROP COLUMN "chatName"`);
+    await queryRunner.query(`ALTER TABLE "openwa_gw_messages" DROP COLUMN "chatName"`);
   }
 }

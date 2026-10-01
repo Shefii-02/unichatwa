@@ -439,12 +439,12 @@ export class SendPacingService {
         // — there is no snake_case naming strategy on this connection. Unquoted, Postgres would fold
         // them to lowercase and the query would fail at runtime on the very first cold send.
         .andWhere(
-          `NOT EXISTS (SELECT 1 FROM "messages" p WHERE p."sessionId" = :sessionId AND p."chatId" IN (${DIALECT_PAIR('m')}) AND p."createdAt" < :dayStart)`,
+          `NOT EXISTS (SELECT 1 FROM "openwa_gw_messages" p WHERE p."sessionId" = :sessionId AND p."chatId" IN (${DIALECT_PAIR('m')}) AND p."createdAt" < :dayStart)`,
         )
         // They wrote first: an incoming row strictly earlier than today's first outgoing one makes
         // the chat an answered conversation, not a cold start. A tie stays cold (conservative).
         .andWhere(
-          `NOT EXISTS (SELECT 1 FROM "messages" i WHERE i."sessionId" = :sessionId AND i."chatId" IN (${DIALECT_PAIR('m')}) AND i."direction" = :incoming AND i."createdAt" < (SELECT MIN(o."createdAt") FROM "messages" o WHERE o."sessionId" = :sessionId AND o."chatId" IN (${DIALECT_PAIR('m')}) AND o."direction" = :direction AND o."createdAt" >= :dayStart))`,
+          `NOT EXISTS (SELECT 1 FROM "openwa_gw_messages" i WHERE i."sessionId" = :sessionId AND i."chatId" IN (${DIALECT_PAIR('m')}) AND i."direction" = :incoming AND i."createdAt" < (SELECT MIN(o."createdAt") FROM "openwa_gw_messages" o WHERE o."sessionId" = :sessionId AND o."chatId" IN (${DIALECT_PAIR('m')}) AND o."direction" = :direction AND o."createdAt" >= :dayStart))`,
           { incoming: MessageDirection.INCOMING },
         )
         .getRawOne<{ count: string | number }>()

@@ -13,7 +13,7 @@ import { DateTransformer } from '../../../common/transformers/date.transformer';
 import { jsonColumn, dateColumnType } from '../../../common/utils/column-types';
 import { WebhookFilters } from '../filters/filter-types';
 
-@Entity('webhooks')
+@Entity('openwa_gw_webhooks')
 export class Webhook {
   @PrimaryGeneratedColumn('uuid')
   id!: string;

@@ -74,7 +74,7 @@ export enum AuditSeverity {
   ERROR = 'error',
 }
 
-@Entity('audit_logs')
+@Entity('openwa_gw_audit_logs')
 export class AuditLog {
   @PrimaryGeneratedColumn('uuid')
   id!: string;

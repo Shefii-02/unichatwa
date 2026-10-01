@@ -27,7 +27,7 @@ export class AddUuidDefaultsForPostgres1779235200000 implements MigrationInterfa
   name = 'AddUuidDefaultsForPostgres1779235200000';
 
   // Data-connection tables only — api_keys/audit_logs live on the separate 'main' connection.
-  private readonly tables = ['sessions', 'webhooks', 'messages', 'message_batches'];
+  private readonly tables = ['openwa_gw_sessions', 'openwa_gw_webhooks', 'openwa_gw_messages', 'openwa_gw_message_batches'];
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     if (queryRunner.dataSource.options.type !== 'postgres') return;

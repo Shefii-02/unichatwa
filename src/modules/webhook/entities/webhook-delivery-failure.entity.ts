@@ -10,7 +10,7 @@ import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, Index } from 
  *
  * Lives on the `data` connection (auto-loaded by the webhook entity glob).
  */
-@Entity('webhook_delivery_failures')
+@Entity('openwa_gw_webhook_delivery_failures')
 @Index('IDX_webhook_delivery_failures_sessionId', ['sessionId'])
 // Backs the before-insert duplicate lookup that keeps one row per lost delivery rather than one per
 // reconciler replay. See AddWebhookDeliveryFailureLookupIndex1786300000000.

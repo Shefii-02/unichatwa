@@ -22,7 +22,7 @@ export class AddWebhookDeliveryFailureLookupIndex1786300000000 implements Migrat
       await queryRunner.query('SET LOCAL statement_timeout = 0');
     }
     await queryRunner.query(
-      `CREATE INDEX IF NOT EXISTS "IDX_webhook_delivery_failures_delivery" ON "webhook_delivery_failures" ("webhookId", "idempotencyKey")`,
+      `CREATE INDEX IF NOT EXISTS "IDX_webhook_delivery_failures_delivery" ON "openwa_gw_webhook_delivery_failures" ("webhookId", "idempotencyKey")`,
     );
   }
 

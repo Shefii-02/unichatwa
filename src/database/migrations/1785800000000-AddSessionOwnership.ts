@@ -27,31 +27,31 @@ export class AddSessionOwnership1785800000000 implements MigrationInterface {
     if (queryRunner.connection.options.type === 'postgres') {
       const rows = (await queryRunner.query(
         `SELECT 1 FROM information_schema.columns
-         WHERE table_schema = current_schema() AND table_name = 'sessions' AND column_name = '${name}'`,
+         WHERE table_schema = current_schema() AND table_name = 'openwa_gw_sessions' AND column_name = '${name}'`,
       )) as unknown[];
       return rows.length > 0;
     }
-    const rows = (await queryRunner.query(`PRAGMA table_info("sessions")`)) as Array<{ name: string }>;
+    const rows = (await queryRunner.query(`PRAGMA table_info("openwa_gw_sessions")`)) as Array<{ name: string }>;
     return rows.some(r => r.name === name);
   }
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     const timestamp = queryRunner.connection.options.type === 'postgres' ? 'TIMESTAMP' : 'datetime';
     if (!(await this.hasColumn(queryRunner, 'nodeId'))) {
-      await queryRunner.query(`ALTER TABLE "sessions" ADD COLUMN "nodeId" varchar(190) NULL`);
+      await queryRunner.query(`ALTER TABLE "openwa_gw_sessions" ADD COLUMN "nodeId" varchar(190) NULL`);
     }
     if (!(await this.hasColumn(queryRunner, 'claimedAt'))) {
-      await queryRunner.query(`ALTER TABLE "sessions" ADD COLUMN "claimedAt" ${timestamp} NULL`);
+      await queryRunner.query(`ALTER TABLE "openwa_gw_sessions" ADD COLUMN "claimedAt" ${timestamp} NULL`);
     }
     if (!(await this.hasColumn(queryRunner, 'leaseExpiresAt'))) {
-      await queryRunner.query(`ALTER TABLE "sessions" ADD COLUMN "leaseExpiresAt" ${timestamp} NULL`);
+      await queryRunner.query(`ALTER TABLE "openwa_gw_sessions" ADD COLUMN "leaseExpiresAt" ${timestamp} NULL`);
     }
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
     for (const column of ['leaseExpiresAt', 'claimedAt', 'nodeId']) {
       if (await this.hasColumn(queryRunner, column)) {
-        await queryRunner.query(`ALTER TABLE "sessions" DROP COLUMN "${column}"`);
+        await queryRunner.query(`ALTER TABLE "openwa_gw_sessions" DROP COLUMN "${column}"`);
       }
     }
   }

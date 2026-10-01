@@ -19,7 +19,7 @@ import { MigrationInterface, QueryRunner, TableUnique } from 'typeorm';
 export class ScopeBatchIdUniqueToSession1781800000000 implements MigrationInterface {
   name = 'ScopeBatchIdUniqueToSession1781800000000';
 
-  private static readonly TABLE = 'message_batches';
+  private static readonly TABLE = 'openwa_gw_message_batches';
   private static readonly COMPOSITE = 'UQ_message_batches_session_id_batch_id';
   private static readonly GLOBAL = 'UQ_ff274470c0dbaff6c7d1f9795f5'; // baseline-generated name
 

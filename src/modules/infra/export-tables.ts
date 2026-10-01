@@ -172,14 +172,14 @@ function defineExportTable<K extends keyof MigrationTables>(table: ExportTable<K
  */
 export const EXPORT_TABLES: AnyExportTable[] = [
   // sessions first: webhooks/messages/templates/etc. all reference it (some via FK, all by sessionId).
-  defineExportTable({ key: 'sessions', table: 'sessions' }),
-  defineExportTable({ key: 'webhooks', table: 'webhooks', afterRead: redactWebhookCredentials }),
+  defineExportTable({ key: 'sessions', table: 'openwa_gw_sessions' }),
+  defineExportTable({ key: 'webhooks', table: 'openwa_gw_webhooks', afterRead: redactWebhookCredentials }),
 
   // Both carry a full inline base64 payload, so they share ONE budget: messages are served first
   // (newest media kept), batches spend what is left. Optional — an older DB may predate them.
   defineExportTable({
     key: 'messages',
-    table: 'messages',
+    table: 'openwa_gw_messages',
     optional: true,
     afterRead: stripBodyTs,
     inlineMedia: {
@@ -190,7 +190,7 @@ export const EXPORT_TABLES: AnyExportTable[] = [
   }),
   defineExportTable({
     key: 'messageBatches',
-    table: 'message_batches',
+    table: 'openwa_gw_message_batches',
     optional: true,
     inlineMedia: {
       bucket: 'messageBatches',
@@ -202,36 +202,36 @@ export const EXPORT_TABLES: AnyExportTable[] = [
   // templates + baileys_stored_messages both FK sessions ON DELETE CASCADE, so the import's
   // `DELETE FROM sessions` wipes them; they must be exported and re-inserted or the documented
   // backup flow loses them permanently.
-  defineExportTable({ key: 'templates', table: 'templates', optional: true }),
-  defineExportTable({ key: 'baileysStoredMessages', table: 'baileys_stored_messages', optional: true }),
+  defineExportTable({ key: 'templates', table: 'openwa_gw_templates', optional: true }),
+  defineExportTable({ key: 'baileysStoredMessages', table: 'openwa_gw_baileys_stored_messages', optional: true }),
 
   // The persisted lid->phone resolution cache. Not a FK to sessions (provenance only), so the
   // import's `DELETE FROM sessions` never clears it — it must be exported + re-inserted explicitly
   // or a backup→restore into a fresh DB loses the whole cache (it self-heals, but lossily).
-  defineExportTable({ key: 'lidMappings', table: 'lid_mappings', optional: true }),
+  defineExportTable({ key: 'lidMappings', table: 'openwa_gw_lid_mappings', optional: true }),
 
   // Integration Fabric + both DLQs: none carry an FK constraint to sessions (sessionId is
   // provenance), so the import clears them explicitly before the sessions DELETE to keep the
   // replace-semantics complete.
-  defineExportTable({ key: 'pluginInstances', table: 'plugin_instances', optional: true }),
-  defineExportTable({ key: 'conversationMappings', table: 'conversation_mappings', optional: true }),
-  defineExportTable({ key: 'ingressEvents', table: 'ingress_events', optional: true }),
-  defineExportTable({ key: 'webhookDeliveryFailures', table: 'webhook_delivery_failures', optional: true }),
-  defineExportTable({ key: 'webhookOutboxEvents', table: 'webhook_outbox_events', optional: true }),
+  defineExportTable({ key: 'pluginInstances', table: 'openwa_gw_plugin_instances', optional: true }),
+  defineExportTable({ key: 'conversationMappings', table: 'openwa_gw_conversation_mappings', optional: true }),
+  defineExportTable({ key: 'ingressEvents', table: 'openwa_gw_ingress_events', optional: true }),
+  defineExportTable({ key: 'webhookDeliveryFailures', table: 'openwa_gw_webhook_delivery_failures', optional: true }),
+  defineExportTable({ key: 'webhookOutboxEvents', table: 'openwa_gw_webhook_outbox_events', optional: true }),
   defineExportTable({
     key: 'integrationDeliveryFailures',
-    table: 'integration_delivery_failures',
+    table: 'openwa_gw_integration_delivery_failures',
     optional: true,
   }),
 
   // status_updates has no FK to sessions (plain columns), so the sessions DELETE never clears it —
   // it must be exported + re-inserted explicitly like lid_mappings.
-  defineExportTable({ key: 'statusUpdates', table: 'status_updates', optional: true }),
+  defineExportTable({ key: 'statusUpdates', table: 'openwa_gw_status_updates', optional: true }),
 
   // automation_rules has an ON DELETE CASCADE FK to sessions, so the sessions DELETE takes every
   // rule with it — exporting and re-inserting it is not optional, or a restore silently destroys
   // every autoreply rule.
-  defineExportTable({ key: 'automationRules', table: 'automation_rules', optional: true }),
+  defineExportTable({ key: 'automationRules', table: 'openwa_gw_automation_rules', optional: true }),
 ];
 
 /**

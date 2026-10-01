@@ -21,7 +21,7 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
 export class AddIntegrationUuidDefaults1782300000000 implements MigrationInterface {
   name = 'AddIntegrationUuidDefaults1782300000000';
 
-  private readonly tables = ['conversation_mappings', 'integration_delivery_failures'];
+  private readonly tables = ['openwa_gw_conversation_mappings', 'openwa_gw_integration_delivery_failures'];
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     if (queryRunner.dataSource.options.type !== 'postgres') return;

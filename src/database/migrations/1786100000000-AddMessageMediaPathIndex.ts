@@ -25,7 +25,7 @@ export class AddMessageMediaPathIndex1786100000000 implements MigrationInterface
       await queryRunner.query('SET LOCAL statement_timeout = 0');
     }
     await queryRunner.query(
-      `CREATE INDEX IF NOT EXISTS "IDX_messages_mediaPath" ON "messages" ("mediaPath") WHERE "mediaPath" IS NOT NULL`,
+      `CREATE INDEX IF NOT EXISTS "IDX_messages_mediaPath" ON "openwa_gw_messages" ("mediaPath") WHERE "mediaPath" IS NOT NULL`,
     );
   }
 

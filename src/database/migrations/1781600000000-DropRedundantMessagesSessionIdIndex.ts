@@ -18,6 +18,6 @@ export class DropRedundantMessagesSessionIdIndex1781600000000 implements Migrati
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "IDX_066163c46cda7e8187f96bc87a" ON "messages" ("sessionId")`);
+    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "IDX_066163c46cda7e8187f96bc87a" ON "openwa_gw_messages" ("sessionId")`);
   }
 }

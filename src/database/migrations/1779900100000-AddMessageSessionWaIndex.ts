@@ -12,7 +12,7 @@ export class AddMessageSessionWaIndex1779900100000 implements MigrationInterface
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(
-      `CREATE INDEX IF NOT EXISTS "IDX_messages_sessionId_waMessageId" ON "messages" ("sessionId", "waMessageId")`,
+      `CREATE INDEX IF NOT EXISTS "IDX_messages_sessionId_waMessageId" ON "openwa_gw_messages" ("sessionId", "waMessageId")`,
     );
   }
 

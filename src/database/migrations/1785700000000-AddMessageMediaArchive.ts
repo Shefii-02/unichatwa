@@ -16,7 +16,7 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  * Hand-authored because `synchronize` is off for the `data` connection on PostgreSQL (and optional
  * on SQLite via DATABASE_SYNCHRONIZE=false). Idempotent: probes for the column first.
  *
- * NOTE: the existence check deliberately avoids `queryRunner.getTable('messages')` — since the FTS
+ * NOTE: the existence check deliberately avoids `queryRunner.getTable('openwa_gw_messages')` — since the FTS
  * migration added the STORED generated column `body_ts`, loading that table's metadata on Postgres
  * sends TypeORM looking for `typeorm_metadata`, which nothing in this migration context creates.
  * A raw dialect-aware probe sidesteps it (same reasoning as AddMessageAuthor).
@@ -28,30 +28,30 @@ export class AddMessageMediaArchive1785700000000 implements MigrationInterface {
     if (queryRunner.connection.options.type === 'postgres') {
       const rows = (await queryRunner.query(
         `SELECT 1 FROM information_schema.columns
-         WHERE table_schema = current_schema() AND table_name = 'messages' AND column_name = '${name}'`,
+         WHERE table_schema = current_schema() AND table_name = 'openwa_gw_messages' AND column_name = '${name}'`,
       )) as unknown[];
       return rows.length > 0;
     }
-    const rows = (await queryRunner.query(`PRAGMA table_info("messages")`)) as Array<{ name: string }>;
+    const rows = (await queryRunner.query(`PRAGMA table_info("openwa_gw_messages")`)) as Array<{ name: string }>;
     return rows.some(r => r.name === name);
   }
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     // Probed independently so a run interrupted between the two ALTERs still completes.
     if (!(await this.hasColumn(queryRunner, 'mediaPath'))) {
-      await queryRunner.query(`ALTER TABLE "messages" ADD COLUMN "mediaPath" varchar NULL`);
+      await queryRunner.query(`ALTER TABLE "openwa_gw_messages" ADD COLUMN "mediaPath" varchar NULL`);
     }
     if (!(await this.hasColumn(queryRunner, 'mediaMimetype'))) {
-      await queryRunner.query(`ALTER TABLE "messages" ADD COLUMN "mediaMimetype" varchar NULL`);
+      await queryRunner.query(`ALTER TABLE "openwa_gw_messages" ADD COLUMN "mediaMimetype" varchar NULL`);
     }
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
     if (await this.hasColumn(queryRunner, 'mediaMimetype')) {
-      await queryRunner.query(`ALTER TABLE "messages" DROP COLUMN "mediaMimetype"`);
+      await queryRunner.query(`ALTER TABLE "openwa_gw_messages" DROP COLUMN "mediaMimetype"`);
     }
     if (await this.hasColumn(queryRunner, 'mediaPath')) {
-      await queryRunner.query(`ALTER TABLE "messages" DROP COLUMN "mediaPath"`);
+      await queryRunner.query(`ALTER TABLE "openwa_gw_messages" DROP COLUMN "mediaPath"`);
     }
   }
 }

@@ -31,7 +31,7 @@ export enum MessageStatus {
   FAILED = 'failed',
 }
 
-@Entity('messages')
+@Entity('openwa_gw_messages')
 @Index(['sessionId', 'createdAt'])
 @Index(['chatId'])
 // Composite index for the ack-driven status UPDATE (scoped by sessionId + waMessageId).

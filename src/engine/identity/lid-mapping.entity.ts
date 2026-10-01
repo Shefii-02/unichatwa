@@ -11,7 +11,7 @@ import { Column, Entity, Index, PrimaryColumn, UpdateDateColumn } from 'typeorm'
  * only (which session last wrote the row) - intentionally NOT a foreign key, since the row outlives any
  * one session.
  */
-@Entity('lid_mappings')
+@Entity('openwa_gw_lid_mappings')
 @Index(['phone']) // reverse lookup: phone -> lids, for the message from-filter
 export class LidMapping {
   /** The lid number (bare, device-stripped - the user-part of `<lid>@lid`). */

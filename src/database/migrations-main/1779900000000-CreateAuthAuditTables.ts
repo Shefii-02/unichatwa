@@ -15,7 +15,7 @@ export class CreateAuthAuditTables1779900000000 implements MigrationInterface {
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(
-      `CREATE TABLE IF NOT EXISTS "api_keys" (` +
+      `CREATE TABLE IF NOT EXISTS "openwa_gw_api_keys" (` +
         `"id" varchar PRIMARY KEY NOT NULL, ` +
         `"name" varchar(100) NOT NULL, ` +
         `"keyHash" varchar(64) NOT NULL, ` +
@@ -31,10 +31,10 @@ export class CreateAuthAuditTables1779900000000 implements MigrationInterface {
         `"updatedAt" datetime NOT NULL DEFAULT (datetime('now'))` +
         `)`,
     );
-    await queryRunner.query(`CREATE UNIQUE INDEX IF NOT EXISTS "IDX_api_keys_keyHash" ON "api_keys" ("keyHash")`);
+    await queryRunner.query(`CREATE UNIQUE INDEX IF NOT EXISTS "IDX_api_keys_keyHash" ON "openwa_gw_api_keys" ("keyHash")`);
 
     await queryRunner.query(
-      `CREATE TABLE IF NOT EXISTS "audit_logs" (` +
+      `CREATE TABLE IF NOT EXISTS "openwa_gw_audit_logs" (` +
         `"id" varchar PRIMARY KEY NOT NULL, ` +
         `"action" varchar(50) NOT NULL, ` +
         `"severity" varchar(10) NOT NULL DEFAULT ('info'), ` +
@@ -52,10 +52,10 @@ export class CreateAuthAuditTables1779900000000 implements MigrationInterface {
         `"createdAt" datetime NOT NULL DEFAULT (datetime('now'))` +
         `)`,
     );
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "IDX_audit_logs_action" ON "audit_logs" ("action")`);
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "IDX_audit_logs_apiKeyId" ON "audit_logs" ("apiKeyId")`);
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "IDX_audit_logs_sessionId" ON "audit_logs" ("sessionId")`);
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "IDX_audit_logs_createdAt" ON "audit_logs" ("createdAt")`);
+    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "IDX_audit_logs_action" ON "openwa_gw_audit_logs" ("action")`);
+    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "IDX_audit_logs_apiKeyId" ON "openwa_gw_audit_logs" ("apiKeyId")`);
+    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "IDX_audit_logs_sessionId" ON "openwa_gw_audit_logs" ("sessionId")`);
+    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "IDX_audit_logs_createdAt" ON "openwa_gw_audit_logs" ("createdAt")`);
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
@@ -63,8 +63,8 @@ export class CreateAuthAuditTables1779900000000 implements MigrationInterface {
     await queryRunner.query(`DROP INDEX IF EXISTS "IDX_audit_logs_sessionId"`);
     await queryRunner.query(`DROP INDEX IF EXISTS "IDX_audit_logs_apiKeyId"`);
     await queryRunner.query(`DROP INDEX IF EXISTS "IDX_audit_logs_action"`);
-    await queryRunner.query(`DROP TABLE IF EXISTS "audit_logs"`);
+    await queryRunner.query(`DROP TABLE IF EXISTS "openwa_gw_audit_logs"`);
     await queryRunner.query(`DROP INDEX IF EXISTS "IDX_api_keys_keyHash"`);
-    await queryRunner.query(`DROP TABLE IF EXISTS "api_keys"`);
+    await queryRunner.query(`DROP TABLE IF EXISTS "openwa_gw_api_keys"`);
   }
 }

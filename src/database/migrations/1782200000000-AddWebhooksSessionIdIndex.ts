@@ -18,8 +18,8 @@ export class AddWebhooksSessionIdIndex1782200000000 implements MigrationInterfac
       // rejects it syntactically, hence the guard.
       await queryRunner.query('SET LOCAL statement_timeout = 0');
     }
-    if (!(await queryRunner.hasTable('webhooks'))) return;
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "IDX_webhooks_sessionId" ON "webhooks" ("sessionId")`);
+    if (!(await queryRunner.hasTable('openwa_gw_webhooks'))) return;
+    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "IDX_webhooks_sessionId" ON "openwa_gw_webhooks" ("sessionId")`);
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {

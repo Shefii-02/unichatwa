@@ -23,21 +23,21 @@ export class AddTemplateNameUnique1781100000000 implements MigrationInterface {
       // transaction-scoped and a no-op on SQLite (which rejects it syntactically — hence the guard).
       await queryRunner.query('SET LOCAL statement_timeout = 0');
     }
-    if (!(await queryRunner.hasTable('templates'))) return;
+    if (!(await queryRunner.hasTable('openwa_gw_templates'))) return;
 
     // Keep the earliest row per (sessionId, name) — createdAt ASC, id ASC as a stable tiebreak —
     // and rename every other member of the group. substr(name,1,59)+'-dup-'+id(36) is <= 100 chars,
     // so it never overflows the varchar(100) "name" column on PostgreSQL.
     await queryRunner.query(
-      `UPDATE "templates" SET "name" = substr("name", 1, 59) || '-dup-' || "id" ` +
+      `UPDATE "openwa_gw_templates" SET "name" = substr("name", 1, 59) || '-dup-' || "id" ` +
         `WHERE "id" <> (` +
-        `SELECT t2."id" FROM "templates" t2 ` +
-        `WHERE t2."sessionId" = "templates"."sessionId" AND t2."name" = "templates"."name" ` +
+        `SELECT t2."id" FROM "openwa_gw_templates" t2 ` +
+        `WHERE t2."sessionId" = "openwa_gw_templates"."sessionId" AND t2."name" = "openwa_gw_templates"."name" ` +
         `ORDER BY t2."createdAt" ASC, t2."id" ASC LIMIT 1)`,
     );
 
     await queryRunner.query(
-      `CREATE UNIQUE INDEX IF NOT EXISTS "IDX_templates_session_name" ON "templates" ("sessionId", "name")`,
+      `CREATE UNIQUE INDEX IF NOT EXISTS "IDX_templates_session_name" ON "openwa_gw_templates" ("sessionId", "name")`,
     );
   }
 

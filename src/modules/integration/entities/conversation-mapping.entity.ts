@@ -5,7 +5,7 @@ export type HandoverState = 'bot' | 'human' | 'closed';
 
 // Maps a WA chat to a provider conversation, both directions. sessionId is non-FK provenance
 // (a mapping outlives a session; last-write-wins).
-@Entity('conversation_mappings')
+@Entity('openwa_gw_conversation_mappings')
 @Index('UQ_conversation_mappings_forward', ['sessionId', 'chatId', 'pluginId', 'instanceId'], { unique: true })
 @Index('UQ_conversation_mappings_reverse', ['pluginId', 'instanceId', 'providerConversationId'], { unique: true })
 export class ConversationMapping {

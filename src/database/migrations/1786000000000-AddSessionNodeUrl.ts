@@ -9,12 +9,12 @@ export class AddSessionNodeUrl1786000000000 implements MigrationInterface {
   name = 'AddSessionNodeUrl1786000000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
-    if (await queryRunner.hasColumn('sessions', 'nodeUrl')) return;
-    await queryRunner.query(`ALTER TABLE "sessions" ADD COLUMN "nodeUrl" varchar(2048)`);
+    if (await queryRunner.hasColumn('openwa_gw_sessions', 'nodeUrl')) return;
+    await queryRunner.query(`ALTER TABLE "openwa_gw_sessions" ADD COLUMN "nodeUrl" varchar(2048)`);
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    if (!(await queryRunner.hasColumn('sessions', 'nodeUrl'))) return;
-    await queryRunner.query(`ALTER TABLE "sessions" DROP COLUMN "nodeUrl"`);
+    if (!(await queryRunner.hasColumn('openwa_gw_sessions', 'nodeUrl'))) return;
+    await queryRunner.query(`ALTER TABLE "openwa_gw_sessions" DROP COLUMN "nodeUrl"`);
   }
 }

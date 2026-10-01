@@ -35,9 +35,9 @@ export interface SessionOwnershipRow {
  * mean a database whose ownership migration was rolled back; there is simply nothing to carry.
  */
 async function readSessionOwnership(queryRunner: QueryRunner): Promise<SessionOwnershipRow[] | null> {
-  if (!(await queryRunner.hasColumn('sessions', 'nodeId'))) return null;
+  if (!(await queryRunner.hasColumn('openwa_gw_sessions', 'nodeId'))) return null;
   return (await queryRunner.query(
-    'SELECT id, "nodeId", "claimedAt", "leaseExpiresAt", "nodeUrl" FROM sessions WHERE "nodeId" IS NOT NULL',
+    'SELECT id, "nodeId", "claimedAt", "leaseExpiresAt", "nodeUrl" FROM openwa_gw_sessions WHERE "nodeId" IS NOT NULL',
   )) as SessionOwnershipRow[];
 }
 
@@ -101,7 +101,7 @@ export async function restoreSessionOwnership(
   if (!preserved?.length) return;
   for (const row of preserved) {
     await insert(
-      'UPDATE sessions SET "nodeId" = $1, "claimedAt" = $2, "leaseExpiresAt" = $3, "nodeUrl" = $4 WHERE id = $5',
+      'UPDATE openwa_gw_sessions SET "nodeId" = $1, "claimedAt" = $2, "leaseExpiresAt" = $3, "nodeUrl" = $4 WHERE id = $5',
       [row.nodeId, row.claimedAt, carryLease(row.leaseExpiresAt, readAt, now), row.nodeUrl, row.id],
     );
   }
@@ -588,29 +588,29 @@ export class InfraDataService {
             isPostgres ? text : text.replace(/\$\d+/g, '?'),
             isPostgres ? params : params.map(v => (typeof v === 'boolean' ? Number(v) : (v ?? null))),
           );
-        await queryRunner.query('DELETE FROM webhooks');
-        await clearTable('messages');
-        await clearTable('message_batches');
-        await clearTable('templates');
-        await clearTable('baileys_stored_messages');
+        await queryRunner.query('DELETE FROM openwa_gw_webhooks');
+        await clearTable('openwa_gw_messages');
+        await clearTable('openwa_gw_message_batches');
+        await clearTable('openwa_gw_templates');
+        await clearTable('openwa_gw_baileys_stored_messages');
         // lid_mappings is not a FK to sessions, so the sessions DELETE below won't clear it; clear it
         // explicitly so a restore replaces the cache rather than colliding on existing lid PKs.
-        await clearTable('lid_mappings');
+        await clearTable('openwa_gw_lid_mappings');
         // Integration Fabric + both DLQs: none carry an FK constraint to sessions (sessionId is provenance),
         // so clearing them here before the sessions DELETE keeps the replace-semantics complete.
-        await clearTable('plugin_instances');
-        await clearTable('conversation_mappings');
-        await clearTable('ingress_events');
-        await clearTable('webhook_delivery_failures');
+        await clearTable('openwa_gw_plugin_instances');
+        await clearTable('openwa_gw_conversation_mappings');
+        await clearTable('openwa_gw_ingress_events');
+        await clearTable('openwa_gw_webhook_delivery_failures');
         // Same rule, and it bites harder here: webhook_outbox_events carries UNIQUE(webhookId,
         // idempotencyKey), so without this clear a restore onto an instance that already holds the
         // archive's rows collides on every one of them, and the all-or-nothing gate below rolls the
         // whole import back. Restoring a backup onto the instance that produced it is exactly the
         // rollback flow, so leaving it out broke the recovery path rather than a corner of it.
-        await clearTable('webhook_outbox_events');
-        await clearTable('integration_delivery_failures');
+        await clearTable('openwa_gw_webhook_outbox_events');
+        await clearTable('openwa_gw_integration_delivery_failures');
         // status_updates has no FK to sessions; clear it explicitly so the replace is complete.
-        await clearTable('status_updates');
+        await clearTable('openwa_gw_status_updates');
         // Session ownership is CLUSTER RUNTIME STATE, not backup payload: which process currently holds
         // a session's engine, and until when. The replace below deletes it along with everything else,
         // and the sessions importer does not restore it (deliberately — see below), so without this the
@@ -630,7 +630,7 @@ export class InfraDataService {
         // the latest moment these values are known to have been true — never longer than they were.
         const ownershipReadAt = new Date();
 
-        await queryRunner.query('DELETE FROM sessions');
+        await queryRunner.query('DELETE FROM openwa_gw_sessions');
 
         // Restore table by table in TABLE_IMPORTERS order (FK-safe: sessions first). The descriptors
         // carry each table's INSERT text, param mapping, and per-row skip guard; a missing or empty

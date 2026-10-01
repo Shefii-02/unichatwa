@@ -20,7 +20,7 @@ import { WebhookFilters } from '../../webhook/filters/filter-types';
  * validator, same evaluator — so a rule matches exactly what a filtered `message.received` webhook
  * would have fired for. Null/empty conditions match every inbound message.
  */
-@Entity('automation_rules')
+@Entity('openwa_gw_automation_rules')
 export class AutomationRule {
   @PrimaryGeneratedColumn('uuid')
   id!: string;

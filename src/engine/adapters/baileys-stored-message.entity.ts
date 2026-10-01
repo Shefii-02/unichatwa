@@ -9,7 +9,7 @@ import { Session } from '../../modules/session/entities/session.entity';
  * The `session` relation declares the CASCADE FK so both the `synchronize:true` SQLite path and
  * the migration path clean up stored messages when the parent session row is deleted.
  */
-@Entity('baileys_stored_messages')
+@Entity('openwa_gw_baileys_stored_messages')
 @Index(['sessionId', 'waMessageId'], { unique: true }) // lookup + dedup (send-return vs upsert echo)
 @Index(['sessionId', 'createdAt']) // eviction ordering
 export class BaileysStoredMessage {

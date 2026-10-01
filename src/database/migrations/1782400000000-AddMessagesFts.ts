@@ -24,9 +24,9 @@ export class AddMessagesFts1782400000000 implements MigrationInterface {
       // 1781300000000 / 1782200000000.
       await qr.query('SET LOCAL statement_timeout = 0');
       await qr.query(
-        `ALTER TABLE "messages" ADD COLUMN IF NOT EXISTS "body_ts" tsvector GENERATED ALWAYS AS (to_tsvector('simple', coalesce(body, ''))) STORED`,
+        `ALTER TABLE "openwa_gw_messages" ADD COLUMN IF NOT EXISTS "body_ts" tsvector GENERATED ALWAYS AS (to_tsvector('simple', coalesce(body, ''))) STORED`,
       );
-      await qr.query(`CREATE INDEX IF NOT EXISTS "idx_messages_body_ts" ON "messages" USING GIN ("body_ts")`);
+      await qr.query(`CREATE INDEX IF NOT EXISTS "idx_messages_body_ts" ON "openwa_gw_messages" USING GIN ("body_ts")`);
       return;
     }
     // SQLite FTS5 external-content — probe FTS5 first; skip (don't throw) if this build lacks it.
@@ -39,18 +39,18 @@ export class AddMessagesFts1782400000000 implements MigrationInterface {
       return;
     }
     await qr.query(
-      `CREATE VIRTUAL TABLE IF NOT EXISTS "messages_fts" USING fts5(body, content='messages', content_rowid='rowid')`,
+      `CREATE VIRTUAL TABLE IF NOT EXISTS "openwa_gw_messages_fts" USING fts5(body, content='openwa_gw_messages', content_rowid='rowid')`,
     );
     await qr.query(
-      `INSERT INTO "messages_fts"("rowid", "body") SELECT "rowid", "body" FROM "messages" WHERE "body" IS NOT NULL`,
+      `INSERT INTO "openwa_gw_messages_fts"("rowid", "body") SELECT "rowid", "body" FROM "openwa_gw_messages" WHERE "body" IS NOT NULL`,
     );
     await qr.query(`DROP TRIGGER IF EXISTS messages_fts_ai`);
-    await qr.query(`CREATE TRIGGER messages_fts_ai AFTER INSERT ON "messages" BEGIN
-      INSERT INTO "messages_fts"("rowid", "body") VALUES (new."rowid", new."body");
+    await qr.query(`CREATE TRIGGER messages_fts_ai AFTER INSERT ON "openwa_gw_messages" BEGIN
+      INSERT INTO "openwa_gw_messages_fts"("rowid", "body") VALUES (new."rowid", new."body");
     END`);
     await qr.query(`DROP TRIGGER IF EXISTS messages_fts_ad`);
-    await qr.query(`CREATE TRIGGER messages_fts_ad AFTER DELETE ON "messages" BEGIN
-      INSERT INTO "messages_fts"("messages_fts", "rowid", "body") VALUES ('delete', old."rowid", old."body");
+    await qr.query(`CREATE TRIGGER messages_fts_ad AFTER DELETE ON "openwa_gw_messages" BEGIN
+      INSERT INTO "openwa_gw_messages_fts"("openwa_gw_messages_fts", "rowid", "body") VALUES ('delete', old."rowid", old."body");
     END`);
     await qr.query(`DROP TRIGGER IF EXISTS messages_fts_au`);
     // The WHEN clause limits re-indexing to body changes: without it every ack (SENT→DELIVERED→READ),
@@ -58,9 +58,9 @@ export class AddMessagesFts1782400000000 implements MigrationInterface {
     // zero search benefit (body didn't change). NULL-safe via `IS NOT` (SQLite's NULL-safe not-equal):
     // a NULL↔non-NULL body transition still fires, while ack-only updates skip. The INSERT and DELETE
     // triggers above are unchanged — only UPDATE gains the guard.
-    await qr.query(`CREATE TRIGGER messages_fts_au AFTER UPDATE ON "messages" WHEN OLD.body IS NOT NEW.body BEGIN
-      INSERT INTO "messages_fts"("messages_fts", "rowid", "body") VALUES ('delete', old."rowid", old."body");
-      INSERT INTO "messages_fts"("rowid", "body") VALUES (new."rowid", new."body");
+    await qr.query(`CREATE TRIGGER messages_fts_au AFTER UPDATE ON "openwa_gw_messages" WHEN OLD.body IS NOT NEW.body BEGIN
+      INSERT INTO "openwa_gw_messages_fts"("openwa_gw_messages_fts", "rowid", "body") VALUES ('delete', old."rowid", old."body");
+      INSERT INTO "openwa_gw_messages_fts"("rowid", "body") VALUES (new."rowid", new."body");
     END`);
   }
 
@@ -68,12 +68,12 @@ export class AddMessagesFts1782400000000 implements MigrationInterface {
     const isPostgres = qr.dataSource.options.type === 'postgres';
     if (isPostgres) {
       await qr.query(`DROP INDEX IF EXISTS "idx_messages_body_ts"`);
-      await qr.query(`ALTER TABLE "messages" DROP COLUMN IF EXISTS "body_ts"`);
+      await qr.query(`ALTER TABLE "openwa_gw_messages" DROP COLUMN IF EXISTS "body_ts"`);
       return;
     }
     await qr.query(`DROP TRIGGER IF EXISTS messages_fts_au`);
     await qr.query(`DROP TRIGGER IF EXISTS messages_fts_ad`);
     await qr.query(`DROP TRIGGER IF EXISTS messages_fts_ai`);
-    await qr.query(`DROP TABLE IF EXISTS "messages_fts"`);
+    await qr.query(`DROP TABLE IF EXISTS "openwa_gw_messages_fts"`);
   }
 }

@@ -18,7 +18,7 @@ export class AddWebhookOutboxEvents1786200000000 implements MigrationInterface {
   name = 'AddWebhookOutboxEvents1786200000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
-    if (await queryRunner.hasTable('webhook_outbox_events')) return;
+    if (await queryRunner.hasTable('openwa_gw_webhook_outbox_events')) return;
     const isPostgres = queryRunner.connection.options.type === 'postgres';
     const id = isPostgres
       ? `"id" varchar PRIMARY KEY NOT NULL DEFAULT gen_random_uuid()::varchar`
@@ -32,17 +32,17 @@ export class AddWebhookOutboxEvents1786200000000 implements MigrationInterface {
     const now = isPostgres ? 'NOW()' : `(datetime('now'))`;
 
     await queryRunner.query(
-      `CREATE TABLE "webhook_outbox_events" (${id}, "webhookId" varchar NOT NULL, "sessionId" varchar NOT NULL, ` +
+      `CREATE TABLE "openwa_gw_webhook_outbox_events" (${id}, "webhookId" varchar NOT NULL, "sessionId" varchar NOT NULL, ` +
         `"event" varchar NOT NULL, "idempotencyKey" varchar NOT NULL, "deliveryId" varchar NOT NULL, ` +
         `"payload" text, "state" varchar, "attempts" integer NOT NULL DEFAULT (0), "lastAttemptAt" ${nullableTs}, ` +
         `"createdAt" ${createdTs} NOT NULL DEFAULT ${now})`,
     );
 
     await queryRunner.query(
-      `CREATE UNIQUE INDEX "UQ_webhook_outbox_events_webhook_key" ON "webhook_outbox_events" ("webhookId", "idempotencyKey")`,
+      `CREATE UNIQUE INDEX "UQ_webhook_outbox_events_webhook_key" ON "openwa_gw_webhook_outbox_events" ("webhookId", "idempotencyKey")`,
     );
     await queryRunner.query(
-      `CREATE INDEX "IDX_webhook_outbox_events_state_createdAt" ON "webhook_outbox_events" ("state", "createdAt")`,
+      `CREATE INDEX "IDX_webhook_outbox_events_state_createdAt" ON "openwa_gw_webhook_outbox_events" ("state", "createdAt")`,
     );
   }
 
@@ -51,6 +51,6 @@ export class AddWebhookOutboxEvents1786200000000 implements MigrationInterface {
     // hasTable early return and the named indexes were never created.
     await queryRunner.query(`DROP INDEX IF EXISTS "IDX_webhook_outbox_events_state_createdAt"`);
     await queryRunner.query(`DROP INDEX IF EXISTS "UQ_webhook_outbox_events_webhook_key"`);
-    await queryRunner.query(`DROP TABLE IF EXISTS "webhook_outbox_events"`);
+    await queryRunner.query(`DROP TABLE IF EXISTS "openwa_gw_webhook_outbox_events"`);
   }
 }

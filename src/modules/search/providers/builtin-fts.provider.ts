@@ -41,14 +41,14 @@ export class BuiltInFtsProvider implements SearchProvider, OnModuleInit {
   private readonly logger = new Logger('BuiltInFtsProvider');
 
   // OpenWA has two TypeORM connections (main: auth/audit SQLite, data: messages). Bind explicitly to
-  // 'data' so the provider queries the connection that owns the `messages` table + the FTS migration,
+  // 'data' so the provider queries the connection that owns the `openwa_gw_messages` table + the FTS migration,
   // never the default/`main` one. The bare `DataSource` type alone is ambiguous with two connections.
   constructor(@InjectDataSource('data') private readonly dataSource: DataSource) {}
 
   /**
    * Self-heals the FTS schema at bootstrap so search works under DATABASE_SYNCHRONIZE=true (the dev
-   * compose and the zero-config first-boot default), where TypeORM creates the `messages` table from
-   * the entity but NEVER runs migrations — so the migration that establishes `messages_fts` /
+   * compose and the zero-config first-boot default), where TypeORM creates the `openwa_gw_messages` table from
+   * the entity but NEVER runs migrations — so the migration that establishes `openwa_gw_messages_fts` /
    * `body_ts` is skipped and search would 501 on a fresh SQLite box. This re-applies the same
    * idempotent DDL as the migration (1782400000000-AddMessagesFts); `IF NOT EXISTS` / `IF NOT` guards
    * make it a no-op once the schema exists, so migrations-based deployments are unaffected. Probes the
@@ -79,9 +79,9 @@ export class BuiltInFtsProvider implements SearchProvider, OnModuleInit {
   private ftsAvailable: boolean | null = null;
 
   /**
-   * Probes the FTS schema once per instance and caches the result. SQLite: look for the `messages_fts`
+   * Probes the FTS schema once per instance and caches the result. SQLite: look for the `openwa_gw_messages_fts`
    * virtual table in sqlite_master. Postgres: look for the generated `body_ts` column on the SAME
-   * `messages` table the search queries resolve — see the to_regclass note below. Safe to call
+   * `openwa_gw_messages` table the search queries resolve — see the to_regclass note below. Safe to call
    * repeatedly; only the first successful probe hits the DB and caches.
    */
   private async probeFts(): Promise<boolean> {
@@ -96,14 +96,14 @@ export class BuiltInFtsProvider implements SearchProvider, OnModuleInit {
       return false;
     }
     if (this.dataSource.options.type === 'postgres') {
-      // to_regclass('messages') resolves the name through the session search_path — the identical
-      // resolution the runtime queries (`FROM messages m`) use, and the data connection pins
+      // to_regclass('openwa_gw_messages') resolves the name through the session search_path — the identical
+      // resolution the runtime queries (`FROM openwa_gw_messages m`) use, and the data connection pins
       // search_path to `<schema>,public` when POSTGRES_SCHEMA is non-public (app.module.ts). So the
       // probe inspects the table search will actually hit, in the active schema. An unqualified
       // information_schema scan would instead peek across EVERY visible schema and can lie both ways
       // on a custom-schema deployment: a namesake public.messages.body_ts reports FTS present when
       // the active schema lacks it, and a >1-row match (both schemas carry the column) reports it
-      // absent. to_regclass returns NULL when `messages` is unresolvable on the path → zero rows →
+      // absent. to_regclass returns NULL when `openwa_gw_messages` is unresolvable on the path → zero rows →
       // unavailable, so an undeterminable schema fails closed by construction.
       // Fail-closed on probe error (degraded state, e.g. boot ensure left the pool mid-recovery):
       // report unavailable WITHOUT caching, so search() 501s via ensureFts — the same clean posture
@@ -111,7 +111,7 @@ export class BuiltInFtsProvider implements SearchProvider, OnModuleInit {
       let rows: unknown[];
       try {
         rows = await this.dataSource.query(
-          `SELECT a.attname FROM pg_attribute a WHERE a.attrelid = to_regclass('messages') AND a.attname = 'body_ts' AND NOT a.attisdropped`,
+          `SELECT a.attname FROM pg_attribute a WHERE a.attrelid = to_regclass('openwa_gw_messages') AND a.attname = 'body_ts' AND NOT a.attisdropped`,
         );
       } catch (e) {
         this.logger.warn(
@@ -122,7 +122,7 @@ export class BuiltInFtsProvider implements SearchProvider, OnModuleInit {
       this.ftsAvailable = Array.isArray(rows) && rows.length >= 1;
     } else {
       const rows: unknown[] = await this.dataSource.query(
-        `SELECT name FROM sqlite_master WHERE type='table' AND name='messages_fts'`,
+        `SELECT name FROM sqlite_master WHERE type='table' AND name='openwa_gw_messages_fts'`,
       );
       this.ftsAvailable = Array.isArray(rows) && rows.length === 1;
     }
@@ -157,10 +157,10 @@ export class BuiltInFtsProvider implements SearchProvider, OnModuleInit {
     const isPostgres = this.dataSource.options.type === 'postgres';
     if (isPostgres) {
       await this.dataSource.query(
-        `ALTER TABLE "messages" ADD COLUMN IF NOT EXISTS "body_ts" tsvector GENERATED ALWAYS AS (to_tsvector('simple', coalesce(body, ''))) STORED`,
+        `ALTER TABLE "openwa_gw_messages" ADD COLUMN IF NOT EXISTS "body_ts" tsvector GENERATED ALWAYS AS (to_tsvector('simple', coalesce(body, ''))) STORED`,
       );
       await this.dataSource.query(
-        `CREATE INDEX IF NOT EXISTS "idx_messages_body_ts" ON "messages" USING GIN ("body_ts")`,
+        `CREATE INDEX IF NOT EXISTS "idx_openwa_gw_messages_body_ts" ON "openwa_gw_messages" USING GIN ("body_ts")`,
       );
       return true;
     }
@@ -168,13 +168,13 @@ export class BuiltInFtsProvider implements SearchProvider, OnModuleInit {
     const fts5: unknown[] = await this.dataSource.query(`SELECT sqlite_compileoption_used('ENABLE_FTS5') AS enabled`);
     if (!Number((fts5 as Array<{ enabled: number }>)[0]?.enabled)) return false;
     await this.dataSource.query(
-      `CREATE VIRTUAL TABLE IF NOT EXISTS "messages_fts" USING fts5(body, content='messages', content_rowid='rowid')`,
+      `CREATE VIRTUAL TABLE IF NOT EXISTS "openwa_gw_messages_fts" USING fts5(body, content='openwa_gw_messages', content_rowid='rowid')`,
     );
-    // Backfill the rows this index does not hold. NOT an emptiness test: `messages_fts` is an FTS5
-    // external-content table, so `count(*)` on it scans `messages` and returns THAT table's row
+    // Backfill the rows this index does not hold. NOT an emptiness test: `openwa_gw_messages_fts` is an FTS5
+    // external-content table, so `count(*)` on it scans `openwa_gw_messages` and returns THAT table's row
     // count, never the number of indexed documents — a "the index is empty" probe written that way
-    // is unsatisfiable, because a zero count means `messages` itself is empty. The indexed documents
-    // live in the `messages_fts_docsize` shadow table, so completeness is a rowid-level anti-join.
+    // is unsatisfiable, because a zero count means `openwa_gw_messages` itself is empty. The indexed documents
+    // live in the `openwa_gw_messages_fts_docsize` shadow table, so completeness is a rowid-level anti-join.
     //
     // It has to hold on a PARTIALLY populated index, not just an empty one: once a box has booted
     // once without the backfill, its later writes are indexed by the triggers below while its older
@@ -184,34 +184,34 @@ export class BuiltInFtsProvider implements SearchProvider, OnModuleInit {
     // them fail, not merely searches. Reads `d."rowid"` rather than `d."id"`: same query plan,
     // without depending on the shadow table's column naming.
     const gapRow: unknown[] = await this.dataSource.query(
-      `SELECT EXISTS(SELECT 1 FROM "messages" m WHERE m."body" IS NOT NULL
-         AND NOT EXISTS (SELECT 1 FROM "messages_fts_docsize" d WHERE d."rowid" = m."rowid")) AS missing`,
+      `SELECT EXISTS(SELECT 1 FROM "openwa_gw_messages" m WHERE m."body" IS NOT NULL
+         AND NOT EXISTS (SELECT 1 FROM "openwa_gw_messages_fts_docsize" d WHERE d."rowid" = m."rowid")) AS missing`,
     );
     if (Number((gapRow as Array<{ missing: number }>)[0]?.missing)) {
       // `body IS NOT NULL` mirrors the migration's own backfill exactly: a repair that indexed a NULL
       // body as an empty document would leave the index disagreeing with the schema it repairs.
       await this.dataSource.query(
-        `INSERT INTO "messages_fts"("rowid", "body")
-           SELECT m."rowid", m."body" FROM "messages" m WHERE m."body" IS NOT NULL
-           AND NOT EXISTS (SELECT 1 FROM "messages_fts_docsize" d WHERE d."rowid" = m."rowid")`,
+        `INSERT INTO "openwa_gw_messages_fts"("rowid", "body")
+           SELECT m."rowid", m."body" FROM "openwa_gw_messages" m WHERE m."body" IS NOT NULL
+           AND NOT EXISTS (SELECT 1 FROM "openwa_gw_messages_fts_docsize" d WHERE d."rowid" = m."rowid")`,
       );
     }
     // The three sync triggers are CREATE-OR-REPLACE by name via DROP + CREATE; idempotent on re-run.
-    await this.dataSource.query(`DROP TRIGGER IF EXISTS messages_fts_ai`);
-    await this.dataSource.query(`CREATE TRIGGER messages_fts_ai AFTER INSERT ON "messages" BEGIN
-      INSERT INTO "messages_fts"("rowid", "body") VALUES (new."rowid", new."body");
+    await this.dataSource.query(`DROP TRIGGER IF EXISTS openwa_gw_messages_fts_ai`);
+    await this.dataSource.query(`CREATE TRIGGER openwa_gw_messages_fts_ai AFTER INSERT ON "openwa_gw_messages" BEGIN
+      INSERT INTO "openwa_gw_messages_fts"("rowid", "body") VALUES (new."rowid", new."body");
     END`);
-    await this.dataSource.query(`DROP TRIGGER IF EXISTS messages_fts_ad`);
-    await this.dataSource.query(`CREATE TRIGGER messages_fts_ad AFTER DELETE ON "messages" BEGIN
-      INSERT INTO "messages_fts"("messages_fts", "rowid", "body") VALUES ('delete', old."rowid", old."body");
+    await this.dataSource.query(`DROP TRIGGER IF EXISTS openwa_gw_messages_fts_ad`);
+    await this.dataSource.query(`CREATE TRIGGER openwa_gw_messages_fts_ad AFTER DELETE ON "openwa_gw_messages" BEGIN
+      INSERT INTO "openwa_gw_messages_fts"("openwa_gw_messages_fts", "rowid", "body") VALUES ('delete', old."rowid", old."body");
     END`);
-    await this.dataSource.query(`DROP TRIGGER IF EXISTS messages_fts_au`);
+    await this.dataSource.query(`DROP TRIGGER IF EXISTS openwa_gw_messages_fts_au`);
     // WHEN clause skips re-indexing on body-unchanged updates (acks/reactions/status) — mirrors the
     // migration. NULL-safe via `IS NOT` so NULL↔non-NULL body transitions still fire.
     await this.dataSource.query(
-      `CREATE TRIGGER messages_fts_au AFTER UPDATE ON "messages" WHEN OLD.body IS NOT NEW.body BEGIN
-      INSERT INTO "messages_fts"("messages_fts", "rowid", "body") VALUES ('delete', old."rowid", old."body");
-      INSERT INTO "messages_fts"("rowid", "body") VALUES (new."rowid", new."body");
+      `CREATE TRIGGER openwa_gw_messages_fts_au AFTER UPDATE ON "openwa_gw_messages" WHEN OLD.body IS NOT NEW.body BEGIN
+      INSERT INTO "openwa_gw_messages_fts"("openwa_gw_messages_fts", "rowid", "body") VALUES ('delete', old."rowid", old."body");
+      INSERT INTO "openwa_gw_messages_fts"("rowid", "body") VALUES (new."rowid", new."body");
     END`,
     );
     return true;
@@ -307,18 +307,18 @@ export class BuiltInFtsProvider implements SearchProvider, OnModuleInit {
   private buildSqlite(q: SearchQuery, limit: number, offset: number) {
     const ph = BuiltInFtsProvider.sqlitePlaceholder;
     const params: unknown[] = [];
-    const where: string[] = [`messages_fts MATCH ${ph()}`];
+    const where: string[] = [`openwa_gw_messages_fts MATCH ${ph()}`];
     params.push(BuiltInFtsProvider.toFts5Query(q.q));
     this.applyFilters(where, params, q, 'm.', ph);
-    const cols = `m."id", m."waMessageId" AS wa_message_id, m."sessionId" AS session_id, m."chatId" AS chat_id, m."from" AS "from", m."body", m."timestamp", m."type", m."direction", snippet(messages_fts, 0, '<mark>', '</mark>', '…', ${MAX_SNIPPET_WORDS}) AS snippet, rank AS score`;
-    const sql = `SELECT ${cols} FROM messages_fts JOIN messages m ON m."rowid" = messages_fts."rowid" WHERE ${where.join(' AND ')} ORDER BY rank, m."timestamp" DESC LIMIT ${ph()} OFFSET ${ph()}`;
+    const cols = `m."id", m."waMessageId" AS wa_message_id, m."sessionId" AS session_id, m."chatId" AS chat_id, m."from" AS "from", m."body", m."timestamp", m."type", m."direction", snippet(openwa_gw_messages_fts, 0, '<mark>', '</mark>', '…', ${MAX_SNIPPET_WORDS}) AS snippet, rank AS score`;
+    const sql = `SELECT ${cols} FROM openwa_gw_messages_fts JOIN openwa_gw_messages m ON m."rowid" = openwa_gw_messages_fts."rowid" WHERE ${where.join(' AND ')} ORDER BY rank, m."timestamp" DESC LIMIT ${ph()} OFFSET ${ph()}`;
     params.push(limit, offset);
     return { sql, params };
   }
 
   // --- Postgres tsvector -----------------------------------------------------
   // SQL appearance order: FTS term (in FROM clause) -> filters (in WHERE) -> LIMIT -> OFFSET.
-  // The FTS term lives in `FROM messages m, websearch_to_tsquery('simple', $1) AS q(query)`,
+  // The FTS term lives in `FROM openwa_gw_messages m, websearch_to_tsquery('simple', $1) AS q(query)`,
   // which renders BEFORE the WHERE filters — so it must be `$1`, filters `$2..`, LIMIT/OFFSET last.
   // Params are pushed in the same order so the Nth param maps to `$N`.
   private buildPostgres(q: SearchQuery, limit: number, offset: number) {
@@ -331,7 +331,7 @@ export class BuiltInFtsProvider implements SearchProvider, OnModuleInit {
     // StartSel/StopSel are pinned to <mark>/</mark> to match the SQLite FTS5 snippet() output, so the
     // SearchHit.snippet contract stays dialect-agnostic (PG's ts_headline defaults to <b>/</b>).
     const cols = `m."id", m."waMessageId" AS wa_message_id, m."sessionId" AS session_id, m."chatId" AS chat_id, m."from", m."body", m."timestamp", m."type", m."direction", ts_headline('simple', m."body", q.query, 'MaxFragments=1, MaxWords=${MAX_SNIPPET_WORDS}, StartSel=<mark>, StopSel=</mark>') AS snippet, ts_rank(m.body_ts, q.query) AS score`;
-    const sql = `SELECT ${cols} FROM messages m, ${ftsTerm} WHERE ${where.join(' AND ')} ORDER BY score DESC, m."timestamp" DESC LIMIT ${ph()} OFFSET ${ph()}`;
+    const sql = `SELECT ${cols} FROM openwa_gw_messages m, ${ftsTerm} WHERE ${where.join(' AND ')} ORDER BY score DESC, m."timestamp" DESC LIMIT ${ph()} OFFSET ${ph()}`;
     params.push(limit, offset);
     return { sql, params };
   }
@@ -388,15 +388,15 @@ export class BuiltInFtsProvider implements SearchProvider, OnModuleInit {
       params.push(q.q);
       where.push(`m.body_ts @@ q.query`);
       this.applyFilters(where, params, q, 'm.', ph);
-      const sql = `SELECT count(*)::int AS n FROM messages m, ${ftsTerm} WHERE ${where.join(' AND ')}`;
+      const sql = `SELECT count(*)::int AS n FROM openwa_gw_messages m, ${ftsTerm} WHERE ${where.join(' AND ')}`;
       const rows = await this.dataSource.query<CountRow[]>(sql, params);
       return Number(rows[0]?.n ?? 0);
     }
     const ph = BuiltInFtsProvider.sqlitePlaceholder;
-    where.push(`messages_fts MATCH ${ph()}`);
+    where.push(`openwa_gw_messages_fts MATCH ${ph()}`);
     params.push(BuiltInFtsProvider.toFts5Query(q.q));
     this.applyFilters(where, params, q, 'm.', ph);
-    const sql = `SELECT count(*) AS n FROM messages_fts JOIN messages m ON m."rowid" = messages_fts."rowid" WHERE ${where.join(' AND ')}`;
+    const sql = `SELECT count(*) AS n FROM openwa_gw_messages_fts JOIN openwa_gw_messages m ON m."rowid" = openwa_gw_messages_fts."rowid" WHERE ${where.join(' AND ')}`;
     const rows = await this.dataSource.query<CountRow[]>(sql, params);
     return Number(rows[0]?.n ?? 0);
   }

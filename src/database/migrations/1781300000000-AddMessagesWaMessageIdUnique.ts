@@ -21,25 +21,25 @@ export class AddMessagesWaMessageIdUnique1781300000000 implements MigrationInter
       // a no-op everywhere else — SQLite rejects it syntactically, hence the guard.
       await queryRunner.query('SET LOCAL statement_timeout = 0');
     }
-    if (!(await queryRunner.hasTable('messages'))) return;
+    if (!(await queryRunner.hasTable('openwa_gw_messages'))) return;
 
     await queryRunner.query(
-      `DELETE FROM "messages" WHERE "waMessageId" IS NOT NULL AND "id" <> (` +
-        `SELECT m2."id" FROM "messages" m2 ` +
-        `WHERE m2."sessionId" = "messages"."sessionId" AND m2."waMessageId" = "messages"."waMessageId" ` +
+      `DELETE FROM "openwa_gw_messages" WHERE "waMessageId" IS NOT NULL AND "id" <> (` +
+        `SELECT m2."id" FROM "openwa_gw_messages" m2 ` +
+        `WHERE m2."sessionId" = "openwa_gw_messages"."sessionId" AND m2."waMessageId" = "openwa_gw_messages"."waMessageId" ` +
         `ORDER BY m2."createdAt" ASC, m2."id" ASC LIMIT 1)`,
     );
 
     await queryRunner.query(`DROP INDEX IF EXISTS "IDX_messages_sessionId_waMessageId"`);
     await queryRunner.query(
-      `CREATE UNIQUE INDEX IF NOT EXISTS "UQ_messages_sessionId_waMessageId" ON "messages" ("sessionId", "waMessageId")`,
+      `CREATE UNIQUE INDEX IF NOT EXISTS "UQ_messages_sessionId_waMessageId" ON "openwa_gw_messages" ("sessionId", "waMessageId")`,
     );
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`DROP INDEX IF EXISTS "UQ_messages_sessionId_waMessageId"`);
     await queryRunner.query(
-      `CREATE INDEX IF NOT EXISTS "IDX_messages_sessionId_waMessageId" ON "messages" ("sessionId", "waMessageId")`,
+      `CREATE INDEX IF NOT EXISTS "IDX_messages_sessionId_waMessageId" ON "openwa_gw_messages" ("sessionId", "waMessageId")`,
     );
   }
 }

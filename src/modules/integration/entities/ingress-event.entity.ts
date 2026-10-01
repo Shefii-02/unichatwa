@@ -24,7 +24,7 @@ export type IngressDispatchState = 'pending' | 'dispatched' | 'failed';
 // ('failed'). At that point the dispatch tier owns the payload (the BullMQ job, or the DLQ row on
 // failure) and the row's payload is retired to NULL, leaving a slim dedup marker (~hundreds of bytes
 // instead of up to 2× maxBodyBytes). payloadHash is kept permanently as the content fingerprint.
-@Entity('ingress_events')
+@Entity('openwa_gw_ingress_events')
 @Index('UQ_ingress_events_instance_delivery', ['pluginId', 'instanceId', 'providerDeliveryId'], { unique: true })
 @Index('IDX_ingress_events_createdAt', ['createdAt'])
 @Index('IDX_ingress_events_dispatchState', ['dispatchState', 'createdAt'])

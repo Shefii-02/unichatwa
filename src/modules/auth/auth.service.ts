@@ -364,7 +364,7 @@ export class AuthService implements OnModuleInit, OnModuleDestroy {
       .where('"id" = :id', { id })
       .andWhere(
         `(NOT (${AuthService.usableAdminCondition('')}) OR EXISTS (` +
-          `SELECT 1 FROM "api_keys" "other" WHERE "other"."id" <> :id AND ${AuthService.usableAdminCondition('other')}))`,
+          `SELECT 1 FROM "openwa_gw_api_keys" "other" WHERE "other"."id" <> :id AND ${AuthService.usableAdminCondition('other')}))`,
       )
       .setParameters({ adminRole: ApiKeyRole.ADMIN, guardNow: AuthService.guardNowParam() }) as T;
   }
