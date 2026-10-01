@@ -28,6 +28,10 @@
 // script and restarting (e.g. a usageCount bump, a new audit log row) are NOT carried over — keep
 // that window short.
 import 'reflect-metadata';
+// Loads .env / data/.env.generated into process.env exactly like the app does (main.ts imports
+// this first too), so MAIN_DATABASE_* values set in .env are picked up without having to prefix
+// the command with them inline. Must be the first import — see load-env.ts's own note on why.
+import '../src/config/load-env';
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const Database = require('better-sqlite3');
 import { DataSource } from 'typeorm';
