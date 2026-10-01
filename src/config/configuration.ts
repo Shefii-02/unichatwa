@@ -172,24 +172,25 @@ export default () => ({
     logging: process.env.DATABASE_LOGGING === 'true',
   },
 
-  // Data Storage Database configuration (pluggable: SQLite, PostgreSQL, etc.)
+  // Data Storage Database configuration (pluggable: SQLite, PostgreSQL, MySQL)
   dataDatabase: {
-    type: process.env.DATABASE_TYPE || 'sqlite',
+    type: (process.env.DATABASE_TYPE || 'sqlite') as 'sqlite' | 'postgres' | 'mysql',
     // SQLite path (used when type is sqlite)
     database: process.env.DATABASE_NAME || './data/openwa.sqlite',
-    // Postgres database NAME (used when type is postgres). Resolved from the same
+    // Postgres/MySQL database NAME (used when type is postgres or mysql). Resolved from the same
     // DATABASE_NAME env as the migration CLI (data-source.ts) so the runtime factory and
-    // migrations never target different databases. Distinct sqlite-vs-pg defaults.
+    // migrations never target different databases. Distinct sqlite-vs-sql-server defaults.
     name: process.env.DATABASE_NAME || 'openwa',
     // PostgreSQL schema (used when type is postgres). Default 'public' preserves the historical
     // behavior; set POSTGRES_SCHEMA to place OpenWA's tables + the TypeORM migration ledger in a
     // dedicated schema (e.g. a managed-Postgres project schema, or to isolate OpenWA from other
     // apps sharing the database). The schema must already exist — a missing one fails fast at
-    // migration time rather than silently falling back to public. SQLite ignores this.
+    // migration time rather than silently falling back to public. SQLite/MySQL ignore this.
     schema: process.env.POSTGRES_SCHEMA || 'public',
-    // PostgreSQL/MySQL connection (used when type is postgres/mysql)
+    // PostgreSQL/MySQL connection (used when type is postgres/mysql). Port default follows
+    // whichever dialect is selected (5432 / 3306); DATABASE_PORT always overrides both.
     host: process.env.DATABASE_HOST || 'localhost',
-    port: parseInt(process.env.DATABASE_PORT || '5432', 10),
+    port: parseInt(process.env.DATABASE_PORT || (process.env.DATABASE_TYPE === 'mysql' ? '3306' : '5432'), 10),
     username: process.env.DATABASE_USERNAME,
     password: process.env.DATABASE_PASSWORD,
     synchronize: process.env.DATABASE_SYNCHRONIZE === 'true',

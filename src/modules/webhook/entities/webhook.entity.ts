@@ -10,7 +10,7 @@ import {
 } from 'typeorm';
 import { Session } from '../../session/entities/session.entity';
 import { DateTransformer } from '../../../common/transformers/date.transformer';
-import { jsonColumnType, dateColumnType } from '../../../common/utils/column-types';
+import { jsonColumn, dateColumnType } from '../../../common/utils/column-types';
 import { WebhookFilters } from '../filters/filter-types';
 
 @Entity('webhooks')
@@ -33,17 +33,17 @@ export class Webhook {
   @Column({ type: 'varchar', length: 2048 })
   url!: string;
 
-  @Column({ type: jsonColumnType(), default: '["message.received"]' })
+  @Column(jsonColumn('["message.received"]'))
   events!: string[];
 
   @Column({ type: 'varchar', length: 255, nullable: true })
   secret!: string | null;
 
-  @Column({ type: jsonColumnType(), default: '{}' })
+  @Column(jsonColumn('{}'))
   headers!: Record<string, string>;
 
   // Optional smart pre-filter. Null/absent means "no filtering" (fire on every subscribed event).
-  @Column({ type: jsonColumnType(), nullable: true })
+  @Column({ ...jsonColumn(), nullable: true })
   filters!: WebhookFilters | null;
 
   @Column({ type: 'boolean', default: true })

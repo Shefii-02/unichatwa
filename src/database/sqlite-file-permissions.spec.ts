@@ -100,6 +100,21 @@ describe('SqlitePermissionsBoot', () => {
     expect(modeOf(data)).toBe(0o644);
   });
 
+  it('skips the data file when the data connection is MySQL (no local file to tighten)', () => {
+    const main = join(dir, 'main.sqlite');
+    const data = join(dir, 'should-not-be-touched-data.sqlite');
+    writeFileSync(main, '', { mode: 0o644 });
+    writeFileSync(data, '', { mode: 0o644 });
+    const boot = new SqlitePermissionsBoot(
+      configReturning({ 'database.database': main, 'dataDatabase.type': 'mysql', 'dataDatabase.database': data }),
+    );
+
+    boot.onApplicationBootstrap();
+
+    expect(modeOf(main)).toBe(0o600);
+    expect(modeOf(data)).toBe(0o644);
+  });
+
   it('skips the main file when the main connection is MySQL (no local file to tighten)', () => {
     const main = join(dir, 'should-not-be-touched-main.sqlite');
     const data = join(dir, 'openwa.sqlite');

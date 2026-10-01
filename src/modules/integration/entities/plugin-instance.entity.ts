@@ -1,5 +1,5 @@
 import { Column, CreateDateColumn, Entity, Index, PrimaryColumn, UpdateDateColumn } from 'typeorm';
-import { jsonColumnType } from '../../../common/utils/column-types';
+import { jsonColumn } from '../../../common/utils/column-types';
 
 // One configured instance of an adapter plugin (e.g. one Chatwoot account). instanceId is namespaced
 // under pluginId; NOT a separate worker. Secret is host-minted and masked-on-read.
@@ -26,7 +26,7 @@ export class PluginInstance {
   @Column({ type: 'varchar', nullable: true })
   verifyToken!: string | null; // optional provider challenge token
 
-  @Column({ type: jsonColumnType(), nullable: true })
+  @Column({ ...jsonColumn(), nullable: true })
   config!: Record<string, unknown> | null;
 
   @Column({ default: true })

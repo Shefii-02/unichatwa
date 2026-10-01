@@ -19,6 +19,19 @@ if (sqlitePathCollision) {
 
 const dbType = process.env.DATABASE_TYPE || 'sqlite';
 
+// This CLI DataSource only manages the sqlite/postgres migration ledgers (dataMigrations below). A
+// MySQL data connection always synchronizes its schema at app boot instead (app.module.ts) — there
+// is no MySQL-dialect migration to run/generate, and falling through to the sqlite branch would
+// silently try to open a SQLite file literally named after the MySQL database (DATABASE_NAME), so
+// fail clearly up front instead.
+if (dbType === 'mysql') {
+  throw new Error(
+    'migration:run / migration:generate only support the SQLite and Postgres data connections. ' +
+      'A MySQL data connection (DATABASE_TYPE=mysql) synchronizes its schema automatically at app ' +
+      'boot and has no CLI-managed migrations.',
+  );
+}
+
 const sourceGlob = (...segments: string[]): string => path.join(__dirname, ...segments).replace(/\\/g, '/');
 
 // Scoped to the DATA-owned modules only (session/webhook/message/template/engine/integration/status-store), mirroring

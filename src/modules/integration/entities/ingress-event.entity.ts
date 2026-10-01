@@ -1,5 +1,5 @@
 import { Column, CreateDateColumn, Entity, Index, PrimaryColumn } from 'typeorm';
-import { dateColumnType, jsonColumnType } from '../../../common/utils/column-types';
+import { dateColumnType, jsonColumn, mysqlIndexLength } from '../../../common/utils/column-types';
 import { DateTransformer } from '../../../common/transformers/date.transformer';
 
 // The enqueue-outcome lifecycle of a persisted event, recorded AFTER the fast ack (persist-before-ack
@@ -34,13 +34,15 @@ export class IngressEvent {
   @PrimaryColumn()
   id!: string;
 
-  @Column()
+  // Lengths below are a MySQL-only guard (no-op on sqlite/postgres) — the composite unique @Index
+  // above would otherwise exceed InnoDB's max key length on MySQL. See mysqlIndexLength's doc comment.
+  @Column(mysqlIndexLength(36)) // instance id is a uuid
   instanceId!: string;
 
-  @Column()
+  @Column(mysqlIndexLength(50)) // plugin slug, e.g. "chatwoot", "typebot-connector"
   pluginId!: string;
 
-  @Column()
+  @Column(mysqlIndexLength(191)) // external provider's own delivery id
   providerDeliveryId!: string;
 
   @Column()
@@ -49,7 +51,7 @@ export class IngressEvent {
   // NULL once the dispatch outcome is recorded (see the storage-shape comment above). The reconciler
   // only replays 'pending' rows, which always still carry the payload. NULL on a 'pending' row is
   // unreadable history (e.g. imported without one) — the reconciler skips it loudly.
-  @Column({ type: jsonColumnType(), nullable: true })
+  @Column({ ...jsonColumn(), nullable: true })
   payload!: { headers: Record<string, string>; query: Record<string, string>; body: string; rawBody: string } | null;
 
   // sha256 hex of the rawBody, written at recordOrSkip. Survives payload retirement so operators can

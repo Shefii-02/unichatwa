@@ -1,5 +1,5 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, Index, ValueTransformer } from 'typeorm';
-import { jsonColumnType } from '../../../common/utils/column-types';
+import { jsonColumn } from '../../../common/utils/column-types';
 
 /**
  * A `bigint` column reads back as a string on PostgreSQL (pg avoids >2^53 precision loss) but as a
@@ -85,7 +85,7 @@ export class Message {
   @Column({ type: 'bigint', nullable: true, transformer: bigintToNumberTransformer })
   timestamp!: number;
 
-  @Column({ type: jsonColumnType(), nullable: true })
+  @Column({ ...jsonColumn(), nullable: true })
   metadata!: Record<string, unknown>;
 
   /**

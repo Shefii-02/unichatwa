@@ -1,6 +1,6 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, Unique } from 'typeorm';
 import { DateTransformer } from '../../../common/transformers/date.transformer';
-import { jsonColumnType, dateColumnType } from '../../../common/utils/column-types';
+import { jsonColumn, dateColumnType } from '../../../common/utils/column-types';
 
 export enum BatchStatus {
   PENDING = 'pending',
@@ -53,7 +53,7 @@ export class MessageBatch {
   @Column({ type: 'varchar', default: BatchStatus.PENDING })
   status!: BatchStatus;
 
-  @Column({ type: jsonColumnType() })
+  @Column(jsonColumn())
   messages!: Array<{
     chatId: string;
     type: string;
@@ -61,17 +61,17 @@ export class MessageBatch {
     variables?: Record<string, string>;
   }>;
 
-  @Column({ type: jsonColumnType(), nullable: true })
+  @Column({ ...jsonColumn(), nullable: true })
   options!: {
     delayBetweenMessages: number;
     randomizeDelay: boolean;
     stopOnError: boolean;
   };
 
-  @Column({ type: jsonColumnType(), nullable: true })
+  @Column({ ...jsonColumn(), nullable: true })
   progress!: BatchProgress;
 
-  @Column({ type: jsonColumnType(), nullable: true })
+  @Column({ ...jsonColumn(), nullable: true })
   results!: BatchMessageResult[];
 
   @Column({ name: 'current_index', default: 0 })

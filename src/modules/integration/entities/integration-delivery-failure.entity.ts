@@ -1,5 +1,5 @@
 import { Column, CreateDateColumn, Entity, Index, PrimaryGeneratedColumn } from 'typeorm';
-import { jsonColumnType } from '../../../common/utils/column-types';
+import { jsonColumn } from '../../../common/utils/column-types';
 
 // DLQ-of-record for both inbound (ingress) and outbound (provider egress) delivery failures.
 // Generalizes webhook_delivery_failures. sessionId is provenance (no FK).
@@ -30,7 +30,7 @@ export class IntegrationDeliveryFailure {
   @Column({ type: 'text' })
   lastError!: string;
 
-  @Column({ type: jsonColumnType(), nullable: true })
+  @Column({ ...jsonColumn(), nullable: true })
   payload!: Record<string, unknown> | null;
 
   @Column({ default: false })

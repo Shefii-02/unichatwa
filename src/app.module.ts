@@ -187,7 +187,7 @@ if (dashboardServingEnabled && dashboardBuildPresent) {
       // migrationsRun; the sqlite branches keep the library's default construction + initialize.
       dataSourceFactory: createBootDataSource,
       useFactory: (configService: ConfigService) => {
-        const dbType = configService.get<'sqlite' | 'postgres'>('dataDatabase.type', 'sqlite');
+        const dbType = configService.get<'sqlite' | 'postgres' | 'mysql'>('dataDatabase.type', 'sqlite');
         const baseConfig = {
           entities: [
             __dirname + '/modules/session/**/*.entity{.ts,.js}',
@@ -251,6 +251,35 @@ if (dashboardServingEnabled && dashboardBuildPresent) {
               // path so pg_catalog + any public helpers still resolve; the configured schema wins.
               ...(useCustomSearchPath ? { options: `-c search_path=${schema},public` } : {}),
             },
+          };
+        }
+
+        if (dbType === 'mysql') {
+          // No MySQL-dialect migration exists — src/database/migrations/*.ts is raw SQLite/Postgres
+          // SQL (AUTOINCREMENT/gen_random_uuid()/PRAGMA/ON CONFLICT and friends). A MySQL data
+          // connection always synchronizes instead, deriving the schema straight from the entity
+          // decorators — the same strategy already used for the 'main' connection's MySQL branch
+          // above. Audited before adding this: every entity maps cleanly except three composite
+          // unique indexes that would exceed MySQL's index key-length limit on un-lengthed varchars,
+          // which the entities now guard with mysqlIndexLength() (see column-types.ts) — a no-op on
+          // sqlite/postgres, so their migration-managed schema there is unaffected.
+          //
+          // One known, deliberate functional gap: full-text search
+          // (migrations/1782400000000-AddMessagesFts.ts) exists only as hand-written Postgres
+          // tsvector/GIN and SQLite FTS5 schema with no entity-level representation and no MySQL
+          // equivalent — BuiltInFtsProvider now fails closed on MySQL (returns 501 on /api/search)
+          // instead of erroring; set SEARCH_ENABLED=false to unmount the route entirely if preferred.
+          return {
+            name: 'data',
+            type: 'mysql' as const,
+            host: configService.get<string>('dataDatabase.host', 'localhost'),
+            port: configService.get<number>('dataDatabase.port', 3306),
+            username: configService.get<string>('dataDatabase.username'),
+            password: configService.get<string>('dataDatabase.password'),
+            database: configService.get<string>('dataDatabase.name', 'openwa'),
+            entities: baseConfig.entities,
+            synchronize: true,
+            logging: configService.get<boolean>('dataDatabase.logging', false),
           };
         }
 

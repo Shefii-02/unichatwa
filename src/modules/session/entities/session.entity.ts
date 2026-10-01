@@ -1,6 +1,6 @@
 import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn } from 'typeorm';
 import { DateTransformer } from '../../../common/transformers/date.transformer';
-import { jsonColumnType, dateColumnType } from '../../../common/utils/column-types';
+import { jsonColumn, dateColumnType } from '../../../common/utils/column-types';
 import type { AccountRestriction } from '../../../engine/interfaces/whatsapp-engine.interface';
 
 export enum SessionStatus {
@@ -35,7 +35,7 @@ export class Session {
   @Column({ type: 'varchar', length: 100, nullable: true })
   pushName!: string | null;
 
-  @Column({ type: jsonColumnType(), default: '{}' })
+  @Column(jsonColumn('{}'))
   config!: Record<string, unknown>;
 
   // Phase 3: Proxy per session

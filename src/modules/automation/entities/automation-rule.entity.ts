@@ -9,7 +9,7 @@ import {
   JoinColumn,
 } from 'typeorm';
 import { Session } from '../../session/entities/session.entity';
-import { jsonColumnType } from '../../../common/utils/column-types';
+import { jsonColumn } from '../../../common/utils/column-types';
 import { WebhookFilters } from '../../webhook/filters/filter-types';
 
 /**
@@ -42,7 +42,7 @@ export class AutomationRule {
   enabled!: boolean;
 
   // Null/absent means "match every inbound message" — mirrors webhook filters' additive default.
-  @Column({ type: jsonColumnType(), nullable: true })
+  @Column({ ...jsonColumn(), nullable: true })
   conditions!: WebhookFilters | null;
 
   @Column({ type: 'text' })

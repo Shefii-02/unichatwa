@@ -1,5 +1,5 @@
 import { Column, CreateDateColumn, Entity, Index, PrimaryGeneratedColumn } from 'typeorm';
-import { dateColumnType, jsonColumnType } from '../../../common/utils/column-types';
+import { dateColumnType, jsonColumn } from '../../../common/utils/column-types';
 import { DateTransformer } from '../../../common/transformers/date.transformer';
 
 // The dispatch lifecycle of one outbound delivery, mirroring ingress_events on the inbound side:
@@ -52,7 +52,7 @@ export class WebhookOutboxEvent {
 
   // Retired to NULL the moment an outcome is recorded: only 'pending' rows are replayable, and a
   // dispatched or failed row has no reason to keep a payload that can carry a whole message body.
-  @Column({ type: jsonColumnType(), nullable: true })
+  @Column({ ...jsonColumn(), nullable: true })
   payload!: Record<string, unknown> | null;
 
   @Column({ type: 'varchar', nullable: true })

@@ -59,8 +59,8 @@ export function validateEnv(config: EnvConfig): EnvConfig {
   };
 
   const dbType = str('DATABASE_TYPE');
-  if (dbType && dbType !== 'sqlite' && dbType !== 'postgres') {
-    errors.push(`DATABASE_TYPE must be "sqlite" or "postgres" (got "${dbType}")`);
+  if (dbType && dbType !== 'sqlite' && dbType !== 'postgres' && dbType !== 'mysql') {
+    errors.push(`DATABASE_TYPE must be "sqlite", "postgres", or "mysql" (got "${dbType}")`);
   }
 
   // Whitelist the registered engine/storage ids so a typo fails fast at boot instead of silently
@@ -124,6 +124,15 @@ export function validateEnv(config: EnvConfig): EnvConfig {
         );
       } else if (pgSchema.toLowerCase().startsWith('pg_')) {
         errors.push(`POSTGRES_SCHEMA must not use the reserved "pg_" prefix (got ${JSON.stringify(pgSchema)})`);
+      }
+    }
+  } else if (dbType === 'mysql') {
+    // MySQL data connection needs real connection details — unlike sqlite, there is no file-path
+    // default that works unconfigured. PASSWORD is deliberately not required (unlike postgres
+    // above): a blank root password is a common, legitimate local MySQL setup.
+    for (const key of ['DATABASE_HOST', 'DATABASE_USERNAME']) {
+      if (!str(key)) {
+        errors.push(`${key} is required when DATABASE_TYPE=mysql`);
       }
     }
   } else {

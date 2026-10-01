@@ -59,6 +59,8 @@ export class BuiltInFtsProvider implements SearchProvider, OnModuleInit {
       this.ftsAvailable = await this.ensureFtsSchema();
       if (this.ftsAvailable) {
         this.logger.log('FTS index ready');
+      } else if (this.dataSource.options.type === 'mysql') {
+        this.logger.warn('FTS index unavailable (no MySQL full-text provider); /api/search will return 501');
       } else {
         this.logger.warn('FTS index unavailable (SQLite built without FTS5); /api/search will return 501');
       }
@@ -84,6 +86,15 @@ export class BuiltInFtsProvider implements SearchProvider, OnModuleInit {
    */
   private async probeFts(): Promise<boolean> {
     if (this.ftsAvailable !== null) return this.ftsAvailable;
+    // Neither the Postgres (tsvector/GIN) nor the SQLite (FTS5) index exists on MySQL — the else
+    // branch below queries sqlite_master, which doesn't exist on MySQL and would throw a raw,
+    // uncaught error on the FIRST search request (onModuleInit's try/catch only protects boot, not
+    // this per-request probe). Fail closed immediately instead, matching this method's own "never
+    // let a raw missing-table error escape" contract for every other dialect.
+    if (this.dataSource.options.type === 'mysql') {
+      this.ftsAvailable = false;
+      return false;
+    }
     if (this.dataSource.options.type === 'postgres') {
       // to_regclass('messages') resolves the name through the session search_path — the identical
       // resolution the runtime queries (`FROM messages m`) use, and the data connection pins
@@ -140,6 +151,9 @@ export class BuiltInFtsProvider implements SearchProvider, OnModuleInit {
    * behind — the route 501s cleanly via ensureFts).
    */
   private async ensureFtsSchema(): Promise<boolean> {
+    // No MySQL FTS implementation exists (see probeFts) — skip straight to "unavailable" rather
+    // than running SQLite-only DDL (CREATE VIRTUAL TABLE ... fts5) that would always fail there.
+    if (this.dataSource.options.type === 'mysql') return false;
     const isPostgres = this.dataSource.options.type === 'postgres';
     if (isPostgres) {
       await this.dataSource.query(
