@@ -100,6 +100,26 @@ describe('SqlitePermissionsBoot', () => {
     expect(modeOf(data)).toBe(0o644);
   });
 
+  it('skips the main file when the main connection is MySQL (no local file to tighten)', () => {
+    const main = join(dir, 'should-not-be-touched-main.sqlite');
+    const data = join(dir, 'openwa.sqlite');
+    writeFileSync(main, '', { mode: 0o644 });
+    writeFileSync(data, '', { mode: 0o644 });
+    const boot = new SqlitePermissionsBoot(
+      configReturning({
+        'database.type': 'mysql',
+        'database.database': main,
+        'dataDatabase.type': 'sqlite',
+        'dataDatabase.database': data,
+      }),
+    );
+
+    boot.onApplicationBootstrap();
+
+    expect(modeOf(main)).toBe(0o644);
+    expect(modeOf(data)).toBe(0o600);
+  });
+
   it('falls back to the documented default paths when config supplies none', () => {
     const boot = new SqlitePermissionsBoot(configReturning({}));
     // Must not throw even when neither default file exists (e.g. a fresh checkout before first boot).

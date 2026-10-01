@@ -14,6 +14,19 @@ if (sqlitePathCollision) {
   throw new Error(sqlitePathCollision);
 }
 
+// This CLI DataSource only manages the SQLite main connection's migrations-main/ ledger. A MySQL
+// main connection (MAIN_DATABASE_TYPE=mysql) always synchronizes its schema at app boot instead
+// (app.module.ts) — there is nothing for migration:run:main/migration:generate:main to do there,
+// and constructing a 'better-sqlite3' DataSource against MySQL connection details would just fail
+// confusingly, so fail clearly up front instead.
+if ((process.env.MAIN_DATABASE_TYPE || 'sqlite') !== 'sqlite') {
+  throw new Error(
+    'migration:run:main / migration:generate:main only support the SQLite main connection. ' +
+      'A MySQL main connection (MAIN_DATABASE_TYPE=mysql) synchronizes its schema automatically ' +
+      'at app boot and has no CLI-managed migrations.',
+  );
+}
+
 /**
  * Standalone TypeORM CLI DataSource for the MAIN connection (auth + audit).
  *

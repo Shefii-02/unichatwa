@@ -144,18 +144,30 @@ export default () => ({
     enabled: process.env.CACHE_ENABLED === 'true',
   },
 
-  // Main Database configuration (always SQLite for boot config)
+  // Main Database configuration (auth/audit: api_keys + audit_logs). Default SQLite for
+  // zero-config boot; MAIN_DATABASE_TYPE=mysql is also supported, e.g. to keep this data
+  // visible in the same MySQL/phpMyAdmin instance as the rest of a deployment.
   database: {
-    type: 'sqlite' as const,
-    // SQLite file for the auth/audit DB. Overridable (e.g. e2e points it at a temp file) so tests
-    // never write api keys into the developer's ./data/main.sqlite.
+    type: (process.env.MAIN_DATABASE_TYPE || 'sqlite') as 'sqlite' | 'mysql',
+    // SQLite file for the auth/audit DB (used when type is sqlite). Overridable (e.g. e2e points
+    // it at a temp file) so tests never write api keys into the developer's ./data/main.sqlite.
     database: process.env.MAIN_DATABASE_NAME || './data/main.sqlite',
+    // MySQL connection (used when type is mysql).
+    host: process.env.MAIN_DATABASE_HOST || 'localhost',
+    port: parseInt(process.env.MAIN_DATABASE_PORT || '3306', 10),
+    username: process.env.MAIN_DATABASE_USERNAME,
+    password: process.env.MAIN_DATABASE_PASSWORD,
+    // MySQL database NAME (used when type is mysql). Defaults to 'openwa_main' — distinct from
+    // the data connection's default db name ('openwa') — so pointing both connections at the
+    // same MySQL server never collides their tables into one schema.
+    name: process.env.MAIN_DATABASE_NAME || 'openwa_main',
     // Schema management for the auth/audit DB. Default ON (zero-config first boot).
     // Set MAIN_DATABASE_SYNCHRONIZE=false to manage schema via the main-owned migrations
     // instead (migrationsRun then creates api_keys/audit_logs). When disabled, run the
     // main-connection migrations explicitly with `npm run migration:run:main` (or
     // `migration:run:main:prod` for the compiled image) — the plain `migration:run` only
-    // manages the data connection.
+    // manages the data connection. Ignored for MySQL: a MySQL main connection always
+    // synchronizes (see app.module.ts) because migrations-main/ is SQLite-only raw SQL.
     synchronize: process.env.MAIN_DATABASE_SYNCHRONIZE !== 'false',
     logging: process.env.DATABASE_LOGGING === 'true',
   },

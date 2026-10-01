@@ -28,6 +28,10 @@ export function sqliteDataMainPathCollision(config: EnvConfig): string | null {
   // Postgres uses a bare database NAME, never a file path — no collision is possible there.
   const dbType = read('DATABASE_TYPE');
   if (dbType !== undefined && dbType !== 'sqlite') return null;
+  // A MySQL main connection has no SQLite file either — MAIN_DATABASE_NAME becomes a MySQL
+  // database name in that case, not a file path, so no collision is possible.
+  const mainDbType = read('MAIN_DATABASE_TYPE');
+  if (mainDbType !== undefined && mainDbType !== 'sqlite') return null;
   const dataDbName = read('DATABASE_NAME');
   if (!dataDbName) return null;
   const mainDbPath = read('MAIN_DATABASE_NAME') || MAIN_DB_DEFAULT_PATH;
@@ -70,6 +74,7 @@ export function validateEnv(config: EnvConfig): EnvConfig {
   };
   checkEnum('ENGINE_TYPE', ['whatsapp-web.js', 'baileys']);
   checkEnum('STORAGE_TYPE', ['local', 's3']);
+  checkEnum('MAIN_DATABASE_TYPE', ['sqlite', 'mysql']);
   // Every production hardening in the repo gates on the exact string 'production', so an
   // unrecognised value silently selects the permissive branch of each one — CORS, Swagger, DTO
   // error detail, the default-secret guard and the ALLOW_DEV_API_KEY rejection that stops the public
@@ -143,6 +148,18 @@ export function validateEnv(config: EnvConfig): EnvConfig {
           dataDbName,
         )}. A bare name is the PostgreSQL DB name — leave DATABASE_NAME unset for SQLite to use the default ./data/openwa.sqlite.`,
       );
+    }
+  }
+
+  // MAIN_DATABASE_TYPE=mysql needs real connection details — unlike sqlite, there is no file-path
+  // default that works unconfigured. PASSWORD is deliberately not required here (unlike the
+  // postgres block above): a blank root password is a common, legitimate local MySQL setup
+  // (XAMPP/MAMP-style), and configuration.ts passes an empty/undefined password through as-is.
+  if (str('MAIN_DATABASE_TYPE') === 'mysql') {
+    for (const key of ['MAIN_DATABASE_HOST', 'MAIN_DATABASE_USERNAME']) {
+      if (!str(key)) {
+        errors.push(`${key} is required when MAIN_DATABASE_TYPE=mysql`);
+      }
     }
   }
 

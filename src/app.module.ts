@@ -132,6 +132,32 @@ if (dashboardServingEnabled && dashboardBuildPresent) {
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => {
+        const entities = [
+          __dirname + '/modules/auth/**/*.entity{.ts,.js}',
+          __dirname + '/modules/audit/**/*.entity{.ts,.js}',
+        ];
+        const dbType = configService.get<'sqlite' | 'mysql'>('database.type', 'sqlite');
+
+        if (dbType === 'mysql') {
+          // The main connection's only migration (migrations-main/) is hand-written SQLite SQL
+          // (datetime('now'), boolean DEFAULT (1)) and is not MySQL-compatible, so a MySQL main
+          // connection always synchronizes instead — TypeORM derives the api_keys/audit_logs
+          // schema straight from the entity decorators. Acceptable tradeoff for just two tables;
+          // revisit (port migrations-main to a dialect-aware form) if that ever changes.
+          return {
+            name: 'main',
+            type: 'mysql' as const,
+            host: configService.get<string>('database.host', 'localhost'),
+            port: configService.get<number>('database.port', 3306),
+            username: configService.get<string>('database.username'),
+            password: configService.get<string>('database.password'),
+            database: configService.get<string>('database.name', 'openwa_main'),
+            entities,
+            synchronize: true,
+            logging: configService.get<boolean>('database.logging', false),
+          };
+        }
+
         // Default ON for zero-config first boot. When disabled
         // (MAIN_DATABASE_SYNCHRONIZE=false), the main-owned migrations create the
         // api_keys/audit_logs schema instead — never both at once.
@@ -140,10 +166,7 @@ if (dashboardServingEnabled && dashboardBuildPresent) {
           name: 'main',
           type: 'better-sqlite3' as const,
           database: configService.get<string>('database.database', './data/main.sqlite'),
-          entities: [
-            __dirname + '/modules/auth/**/*.entity{.ts,.js}',
-            __dirname + '/modules/audit/**/*.entity{.ts,.js}',
-          ],
+          entities,
           // Dedicated migrations dir for the main connection only (must NOT run the
           // data-connection migrations, which target session/webhook/message tables).
           migrations: [__dirname + '/database/migrations-main/*{.ts,.js}'],
