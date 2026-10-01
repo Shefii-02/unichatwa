@@ -30,7 +30,7 @@ export class AutomationEventService {
     try {
       const rows = await this.mysql.query<{ id: number; waha_webhook_url: string }>(
         `SELECT c.id, c.wa_chat_token,
-                (SELECT webhook_url FROM waha_sessions WHERE session_id = ? LIMIT 1) as waha_webhook_url
+                (SELECT webhook_url FROM openwa_sessions WHERE session_id = ? LIMIT 1) as waha_webhook_url
          FROM companies c
          WHERE c.waha_enabled = 1
          LIMIT 1`,
@@ -76,7 +76,7 @@ export class AutomationEventService {
   async logInboundMessage(sessionId: string, companyId: number, from: string): Promise<void> {
     try {
       await this.mysql.execute(
-        `INSERT INTO waha_message_logs
+        `INSERT INTO openwa_message_logs
           (company_id, session_id, recipient_phone, recipient_type, message_type, status, created_at, updated_at)
          VALUES (?, ?, ?, 'contact', 'text', 'received', NOW(), NOW())`,
         [companyId, sessionId, from.replace(/@.*/, '')],

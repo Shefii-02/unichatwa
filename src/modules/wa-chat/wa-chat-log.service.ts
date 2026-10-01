@@ -22,7 +22,7 @@ export class WaChatLogService {
   async logMessage(entry: MessageLogEntry): Promise<void> {
     try {
       await this.mysql.execute(
-        `INSERT INTO waha_message_logs
+        `INSERT INTO openwa_message_logs
           (company_id, session_id, recipient_phone, recipient_type, message_type, status, waha_message_id, error_message, campaign_name, sent_at, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW(), NOW())`,
         [
