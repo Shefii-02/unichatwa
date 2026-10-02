@@ -57,8 +57,15 @@ export const mysqlIndexLength = (length: number): { length?: number } => (isMysq
 const jsonTransformer: ValueTransformer = {
   to: (value: unknown): string | null | undefined =>
     value === null || value === undefined ? value : JSON.stringify(value),
-  from: (value: string | null): unknown =>
-    value === null || value === undefined || value === '' ? null : JSON.parse(value),
+  // MySQL has no RETURNING: for a column with a default, TypeORM's insert path rebuilds
+  // generatedMap from the raw JS entity value it just wrote (e.g. the literal object `{}`),
+  // not the string `to()` produced, then re-runs it through `from()` here. JSON.parse() on a
+  // non-string coerces via toString() first ("[object Object]"), which always throws — so a
+  // value that already isn't a string is already in parsed shape and must pass through as-is.
+  from: (value: unknown): unknown => {
+    if (value === null || value === undefined || value === '') return null;
+    return typeof value === 'string' ? JSON.parse(value) : value;
+  },
 };
 
 /**
