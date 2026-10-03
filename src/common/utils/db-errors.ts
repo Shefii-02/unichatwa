@@ -18,10 +18,10 @@ function isQueryFailedErrorLike(err: unknown): err is DriverErrorWrapperShape {
 }
 
 /**
- * Cross-dialect unique-constraint-violation check by driver code/message, for the two dialects we ship
- * (sqlite dev, postgres prod). Lets insert-or-converge (RMW) paths distinguish a real duplicate from an
- * unrelated failure without depending on a specific driver. Add another branch if a third driver is ever
- * supported.
+ * Cross-dialect unique-constraint-violation check by driver code/message, for the dialects this
+ * deployment may run on (sqlite dev, postgres prod, mysql prod). Lets insert-or-converge (RMW) paths
+ * distinguish a real duplicate from an unrelated failure without depending on a specific driver. Add
+ * another branch if a further driver is ever supported.
  *
  * Precision matters as much as recall: SQLite prefixes EVERY constraint failure with
  * SQLITE_CONSTRAINT (FK, NOT NULL, CHECK included), so a prefix match would swallow a genuine
@@ -35,6 +35,7 @@ export function isUniqueViolation(err: unknown): boolean {
   const e = err as DriverErrorWrapperShape;
   const code = e.driverError?.code ?? e.code;
   if (code === '23505') return true; // postgres unique_violation
+  if (code === 'ER_DUP_ENTRY') return true; // mysql
   if (code === 'SQLITE_CONSTRAINT_UNIQUE' || code === 'SQLITE_CONSTRAINT_PRIMARYKEY') return true; // sqlite
   // Every real constraint failure carries its suffix (FOREIGNKEY/NOTNULL/CHECK included), so those are
   // decisive rejections. The one ambiguous shape is the BARE unsuffixed code: defer it to the message.

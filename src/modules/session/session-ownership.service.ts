@@ -124,7 +124,7 @@ export class SessionOwnershipService {
       .where('id = :id', { id: sessionId })
       // Without leaseParam this clause would silently never match, so an expired claim would never
       // be taken over — stranding every session a crashed process was holding.
-      .andWhere('("nodeId" IS NULL OR "nodeId" = :me OR "leaseExpiresAt" < :now)', {
+      .andWhere('(nodeId IS NULL OR nodeId = :me OR leaseExpiresAt < :now)', {
         me: this.nodeId,
         now: leaseParam(now),
       })
@@ -153,7 +153,7 @@ export class SessionOwnershipService {
       .update(Session)
       .set({ nodeId: null, claimedAt: null, leaseExpiresAt: null, nodeUrl: null })
       .where('id = :id', { id: sessionId })
-      .andWhere('("nodeId" = :me OR "leaseExpiresAt" < :now)', { me: this.nodeId, now: leaseParam(now) })
+      .andWhere('(nodeId = :me OR leaseExpiresAt < :now)', { me: this.nodeId, now: leaseParam(now) })
       .execute();
   }
 
@@ -313,8 +313,8 @@ export class SessionOwnershipService {
   async lapsedHeldByOthers(now = new Date()): Promise<Session[]> {
     return this.sessions
       .createQueryBuilder('session')
-      .where('"nodeId" IS NOT NULL AND "nodeId" <> :me', { me: this.nodeId })
-      .andWhere('"leaseExpiresAt" < :now', { now: leaseParam(now) })
+      .where('nodeId IS NOT NULL AND nodeId <> :me', { me: this.nodeId })
+      .andWhere('leaseExpiresAt < :now', { now: leaseParam(now) })
       .getMany();
   }
 
@@ -336,8 +336,8 @@ export class SessionOwnershipService {
     const count = await this.sessions
       .createQueryBuilder('session')
       .where('id = :id', { id: sessionId })
-      .andWhere('"nodeId" IS NOT NULL AND "nodeId" <> :me', { me: this.nodeId })
-      .andWhere('"leaseExpiresAt" > :now', { now: leaseParam(now) })
+      .andWhere('nodeId IS NOT NULL AND nodeId <> :me', { me: this.nodeId })
+      .andWhere('leaseExpiresAt > :now', { now: leaseParam(now) })
       .getCount();
     return count > 0;
   }
@@ -346,8 +346,8 @@ export class SessionOwnershipService {
     const rows = await this.sessions
       .createQueryBuilder('session')
       .select('session.id', 'id')
-      .where('"nodeId" IS NOT NULL AND "nodeId" <> :me', { me: this.nodeId })
-      .andWhere('"leaseExpiresAt" > :now', { now: leaseParam(now) })
+      .where('nodeId IS NOT NULL AND nodeId <> :me', { me: this.nodeId })
+      .andWhere('leaseExpiresAt > :now', { now: leaseParam(now) })
       .getRawMany<{ id: string }>();
     return rows.map(row => row.id);
   }

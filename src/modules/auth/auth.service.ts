@@ -333,7 +333,7 @@ export class AuthService implements OnModuleInit, OnModuleDestroy {
    * `other` row.
    */
   private static usableAdminCondition(prefix: string): string {
-    const col = (name: string) => (prefix ? `"${prefix}"."${name}"` : `"${name}"`);
+    const col = (name: string) => (prefix ? `${prefix}.${name}` : name);
     return (
       `${col('role')} = :adminRole AND ${col('isActive')} = 1 AND ` +
       `(${col('expiresAt')} IS NULL OR ${col('expiresAt')} > :guardNow) AND ` +
@@ -361,10 +361,10 @@ export class AuthService implements OnModuleInit, OnModuleDestroy {
   private withLastAdminGuard<T extends UpdateQueryBuilder<ApiKey> | DeleteQueryBuilder<ApiKey>>(qb: T, id: string): T {
     // Cast: the chained this-types collapse to the union across a generic receiver.
     return qb
-      .where('"id" = :id', { id })
+      .where('id = :id', { id })
       .andWhere(
         `(NOT (${AuthService.usableAdminCondition('')}) OR EXISTS (` +
-          `SELECT 1 FROM "openwa_gw_api_keys" "other" WHERE "other"."id" <> :id AND ${AuthService.usableAdminCondition('other')}))`,
+          `SELECT 1 FROM openwa_gw_api_keys other WHERE other.id <> :id AND ${AuthService.usableAdminCondition('other')}))`,
       )
       .setParameters({ adminRole: ApiKeyRole.ADMIN, guardNow: AuthService.guardNowParam() }) as T;
   }
@@ -395,7 +395,7 @@ export class AuthService implements OnModuleInit, OnModuleDestroy {
       .createQueryBuilder()
       .update(ApiKey)
       .set(patch)
-      .where('"id" = :id', { id })
+      .where('id = :id', { id })
       .execute();
     if (!result.affected) {
       await this.findOne(id);
