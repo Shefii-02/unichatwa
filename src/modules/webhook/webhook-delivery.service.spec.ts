@@ -21,6 +21,7 @@ import { WebhookDeliveryService, WebhookPayload, WebhookJobData } from './webhoo
 import { WebhookOutboxService } from './webhook-outbox.service';
 import { Webhook } from './entities/webhook.entity';
 import { WebhookDeliveryFailure } from './entities/webhook-delivery-failure.entity';
+import { WebhookDelivery } from './entities/webhook-delivery.entity';
 import { Session } from '../session/entities/session.entity';
 import { WebhookFilters } from './filters/filter-types';
 import { LidMappingStoreService } from '../../engine/identity/lid-mapping-store.service';
@@ -53,6 +54,7 @@ describe('WebhookDeliveryService', () => {
   let service: WebhookDeliveryService;
   let repository: jest.Mocked<Partial<Repository<Webhook>>>;
   let failureRepository: jest.Mocked<Partial<Repository<WebhookDeliveryFailure>>>;
+  let deliveryRepository: jest.Mocked<Partial<Repository<WebhookDelivery>>>;
   let configService: jest.Mocked<Partial<ConfigService>>;
   let hookManager: jest.Mocked<Partial<HookManager>>;
   let webhookQueue: jest.Mocked<Record<string, jest.Mock>>;
@@ -85,6 +87,11 @@ describe('WebhookDeliveryService', () => {
         ),
       find: jest.fn().mockResolvedValue([]),
       delete: jest.fn().mockResolvedValue({ affected: 0 }),
+    };
+
+    deliveryRepository = {
+      insert: jest.fn().mockResolvedValue({}),
+      find: jest.fn().mockResolvedValue([]),
     };
 
     configService = {
@@ -123,6 +130,7 @@ describe('WebhookDeliveryService', () => {
         WebhookDeliveryService,
         { provide: getRepositoryToken(Webhook, 'data'), useValue: repository },
         { provide: getRepositoryToken(WebhookDeliveryFailure, 'data'), useValue: failureRepository },
+        { provide: getRepositoryToken(WebhookDelivery, 'data'), useValue: deliveryRepository },
         { provide: WebhookOutboxService, useValue: outboxService },
         { provide: ConfigService, useValue: configService },
         { provide: HookManager, useValue: hookManager },
@@ -1249,6 +1257,7 @@ describe('WebhookDeliveryService', () => {
           WebhookDeliveryService,
           { provide: getRepositoryToken(Webhook, 'data'), useValue: repository },
           { provide: getRepositoryToken(WebhookDeliveryFailure, 'data'), useValue: failureRepository },
+          { provide: getRepositoryToken(WebhookDelivery, 'data'), useValue: deliveryRepository },
           { provide: WebhookOutboxService, useValue: outboxService },
           { provide: WebhookOutboxService, useValue: outboxService },
           { provide: ConfigService, useValue: { get: jest.fn().mockImplementation(configGet) } },

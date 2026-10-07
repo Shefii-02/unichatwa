@@ -23,6 +23,12 @@ export enum MessageDirection {
   OUTGOING = 'outgoing',
 }
 
+export enum MessageOrigin {
+  AI = 'ai',
+  MANUAL = 'manual',
+  CHATBOT = 'chatbot',
+}
+
 export enum MessageStatus {
   PENDING = 'pending',
   SENT = 'sent',
@@ -81,6 +87,10 @@ export class Message {
     default: MessageDirection.OUTGOING,
   })
   direction!: MessageDirection;
+
+  /** Who/what produced an OUTGOING message (ai/manual/chatbot). Null on every incoming row and on outgoing rows written before this column existed. */
+  @Column({ type: 'varchar', nullable: true })
+  origin?: MessageOrigin | null;
 
   @Column({ type: 'bigint', nullable: true, transformer: bigintToNumberTransformer })
   timestamp!: number;

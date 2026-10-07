@@ -22,6 +22,7 @@ import { WebhookOutboxService } from './webhook-outbox.service';
 import { WebhookDeliveryService } from './webhook-delivery.service';
 import { Webhook } from './entities/webhook.entity';
 import { WebhookDeliveryFailure } from './entities/webhook-delivery-failure.entity';
+import { WebhookDelivery } from './entities/webhook-delivery.entity';
 import { LidMappingStoreService } from '../../engine/identity/lid-mapping-store.service';
 import { userPart } from '../../engine/identity/wa-id';
 import { HookManager } from '../../core/hooks';
@@ -52,6 +53,7 @@ describe('WebhookService', () => {
   let testingModule: TestingModule;
   let repository: jest.Mocked<Partial<Repository<Webhook>>>;
   let failureRepository: jest.Mocked<Partial<Repository<WebhookDeliveryFailure>>>;
+  let deliveryRepository: jest.Mocked<Partial<Repository<WebhookDelivery>>>;
   let sessionRepository: jest.Mocked<Partial<Repository<Session>>>;
   let configService: jest.Mocked<Partial<ConfigService>>;
   let hookManager: jest.Mocked<Partial<HookManager>>;
@@ -73,6 +75,11 @@ describe('WebhookService', () => {
       insert: jest.fn().mockResolvedValue({}),
       find: jest.fn().mockResolvedValue([]),
       delete: jest.fn().mockResolvedValue({ affected: 0 }),
+    };
+
+    deliveryRepository = {
+      insert: jest.fn().mockResolvedValue({}),
+      find: jest.fn().mockResolvedValue([]),
     };
 
     sessionRepository = {
@@ -115,6 +122,7 @@ describe('WebhookService', () => {
         WebhookDeliveryService,
         { provide: getRepositoryToken(Webhook, 'data'), useValue: repository },
         { provide: getRepositoryToken(WebhookDeliveryFailure, 'data'), useValue: failureRepository },
+        { provide: getRepositoryToken(WebhookDelivery, 'data'), useValue: deliveryRepository },
         {
           provide: WebhookOutboxService,
           useValue: { open: jest.fn().mockResolvedValue(undefined), close: jest.fn().mockResolvedValue(undefined) },

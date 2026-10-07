@@ -359,6 +359,48 @@ export class WebhookDeliveryFailureDto {
   createdAt!: Date;
 }
 
+/** One logged webhook delivery attempt — the shape `GET /sessions/:sessionId/webhooks/deliveries` serves. */
+export class WebhookDeliveryDto {
+  @ApiProperty({ example: '0a941dac-a965-45e7-b318-74ae8be134f0' })
+  id!: string;
+
+  @ApiProperty({ example: '0a941dac-a965-45e7-b318-74ae8be134f0' })
+  webhookId!: string;
+
+  @ApiProperty({ example: '0a941dac-a965-45e7-b318-74ae8be134f0' })
+  sessionId!: string;
+
+  @ApiProperty({ example: 'message.received' })
+  event!: string;
+
+  @ApiProperty({ example: 'https://receiver.example.com/hook' })
+  url!: string;
+
+  @ApiPropertyOptional({ type: String, nullable: true, description: 'Truncated JSON of the payload sent.' })
+  requestPayload?: string | null;
+
+  @ApiPropertyOptional({ type: Number, nullable: true, description: 'HTTP status the receiver answered, or null if no exchange completed.' })
+  responseStatus?: number | null;
+
+  @ApiPropertyOptional({ type: String, nullable: true, description: 'Truncated response detail (statusText on success, error text on failure).' })
+  responseBody?: string | null;
+
+  @ApiProperty({ example: true })
+  success!: boolean;
+
+  @ApiProperty({ example: 1 })
+  attempt!: number;
+
+  @ApiProperty({ example: 142 })
+  durationMs!: number;
+
+  @ApiPropertyOptional({ type: String, nullable: true })
+  error?: string | null;
+
+  @ApiProperty({ type: String, format: 'date-time' })
+  createdAt!: Date;
+}
+
 /** Outcome of `POST /sessions/:sessionId/webhooks/:id/test`. */
 export class WebhookTestResponseDto {
   @ApiProperty({ description: 'True when the receiver answered 2xx.', example: true })

@@ -10,11 +10,13 @@ import {
   IsArray,
   ArrayMaxSize,
   IsBoolean,
+  IsEnum,
   Validate,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { IsMentionWidConstraint } from './is-mention-wid.validator';
 import { ToStrictBoolean } from '../../../common/utils/strict-boolean';
+import { MessageOrigin } from '../entities/message.entity';
 
 export const MENTIONS_DESCRIPTION =
   'WIDs to @mention (e.g. ["62811@c.us"]). The text/caption must also contain the @<number> token.';
@@ -144,6 +146,15 @@ export class SendTextMessageDto {
   @IsString()
   @IsNotEmpty()
   quotedMessageId?: string;
+
+  @ApiPropertyOptional({
+    description: 'Who/what is sending this message, for the chat/log views. Omit for a caller that is none of these.',
+    enum: MessageOrigin,
+    example: MessageOrigin.MANUAL,
+  })
+  @IsOptional()
+  @IsEnum(MessageOrigin)
+  origin?: MessageOrigin;
 }
 
 /**

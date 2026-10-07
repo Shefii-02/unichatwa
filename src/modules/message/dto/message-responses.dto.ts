@@ -1,7 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import type { MessageType } from '../../../engine/interfaces/whatsapp-engine.interface';
 import type { ChatKind } from '../../../engine/identity/wa-id';
-import { MessageDirection, MessageStatus } from '../entities/message.entity';
+import { MessageDirection, MessageOrigin, MessageStatus } from '../entities/message.entity';
 
 /**
  * Response shapes for the message read/action routes — the raw handler value, no envelope.
@@ -82,6 +82,14 @@ export class MessageListItemDto {
 
   @ApiProperty({ enum: MessageDirection, example: MessageDirection.INCOMING })
   direction!: MessageDirection;
+
+  @ApiPropertyOptional({
+    enum: MessageOrigin,
+    nullable: true,
+    description: 'Who/what sent an OUTGOING message. Null on every incoming row and on outgoing rows predating this field.',
+    example: MessageOrigin.MANUAL,
+  })
+  origin?: MessageOrigin | null;
 
   @ApiPropertyOptional({
     type: Number,

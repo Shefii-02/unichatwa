@@ -8,7 +8,7 @@ import { SendTextMessageDto, SendMediaMessageDto, SendAudioMessageDto, MessageRe
 import { SendTemplateMessageDto } from './dto/send-template.dto';
 import { assertBase64WithinMediaCap, stripBase64DataUri } from './media-cap.util';
 import { MediaInput, IWhatsAppEngine, MessageResult } from '../../engine/interfaces/whatsapp-engine.interface';
-import { Message, MessageDirection, MessageStatus } from './entities/message.entity';
+import { Message, MessageDirection, MessageOrigin, MessageStatus } from './entities/message.entity';
 import { HookManager, applySendingGate } from '../../core/hooks';
 import { SendPacingService, countsTowardSendBreaker } from './send-pacing.service';
 import { TemplateService } from '../template/template.service';
@@ -50,6 +50,8 @@ export interface SaveOutgoingMessageData {
    * look the quoted message up, and '' is already reply()'s own value when that lookup fails.
    */
   quotedMessageId?: string;
+  /** Who/what is sending this message (ai/manual/chatbot), for the chat/log views. */
+  origin?: MessageOrigin;
 }
 
 /**
@@ -105,6 +107,7 @@ export class MessageSendService {
       body: finalDto.text,
       type: 'text',
       quotedMessageId: finalDto.quotedMessageId,
+      origin: finalDto.origin,
     });
 
     // Opt-in humanising "typing…" pause before the actual send (anti-automation signal).
@@ -568,6 +571,7 @@ export class MessageSendService {
       body: data.body,
       type: data.type,
       direction: MessageDirection.OUTGOING,
+      origin: data.origin ?? null,
       timestamp: data.timestamp,
       status: data.status ?? MessageStatus.PENDING,
       metadata: data.quotedMessageId

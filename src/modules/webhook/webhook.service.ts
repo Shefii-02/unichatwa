@@ -4,6 +4,7 @@ import { FindManyOptions, In, LessThan, Repository } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
 import { Webhook } from './entities/webhook.entity';
 import { WebhookDeliveryFailure } from './entities/webhook-delivery-failure.entity';
+import { WebhookDelivery } from './entities/webhook-delivery.entity';
 import { Session } from '../session/entities/session.entity';
 import { CreateWebhookDto, UpdateWebhookDto } from './dto';
 import { createLogger } from '../../common/services/logger.service';
@@ -47,6 +48,8 @@ export class WebhookService implements OnModuleInit, OnModuleDestroy {
     private readonly webhookRepository: Repository<Webhook>,
     @InjectRepository(WebhookDeliveryFailure, 'data')
     private readonly failureRepository: Repository<WebhookDeliveryFailure>,
+    @InjectRepository(WebhookDelivery, 'data')
+    private readonly deliveryRepository: Repository<WebhookDelivery>,
     @InjectRepository(Session, 'data')
     private readonly sessionRepository: Repository<Session>,
     private readonly configService: ConfigService,
@@ -195,6 +198,21 @@ export class WebhookService implements OnModuleInit, OnModuleDestroy {
     if (sessionScope !== null && sessionScope.length === 0) return []; // requested session outside the key's scope
     return this.failureRepository.find({
       where: sessionScope ? { sessionId: In(sessionScope) } : {},
+      order: { createdAt: 'DESC' },
+      take: limit,
+      skip: offset,
+    });
+  }
+
+  /**
+   * Every logged webhook delivery attempt for a session (success and failure), most recent first —
+   * the browsable history `webhook_delivery_failures` doesn't give you, since that table only ever
+   * gets a row once every retry for a delivery is exhausted.
+   */
+  async listDeliveries(sessionId: string, opts: ListOptions = {}): Promise<WebhookDelivery[]> {
+    const { limit, offset } = resolveListWindow(opts.limit, opts.offset);
+    return this.deliveryRepository.find({
+      where: { sessionId },
       order: { createdAt: 'DESC' },
       take: limit,
       skip: offset,

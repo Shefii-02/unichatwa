@@ -9,8 +9,9 @@ import { workerConnectionOptions, webhookWorkerConcurrency } from '../redis-conn
 import { WebhookJobData, WebhookPayload } from '../../webhook/webhook.service';
 import { Webhook } from '../../webhook/entities/webhook.entity';
 import { WebhookDeliveryFailure } from '../../webhook/entities/webhook-delivery-failure.entity';
+import { WebhookDelivery } from '../../webhook/entities/webhook-delivery.entity';
 import { recordWebhookDeliveryFailure, statusCodeFromError } from '../../webhook/utils/record-delivery-failure';
-import { postWebhookPayload } from '../../webhook/utils/deliver-once';
+import { postWebhookPayload, recordDeliveryAttempt } from '../../webhook/utils/deliver-once';
 import { HookManager } from '../../../core/hooks';
 import { redactSsrfError } from '../../../common/security/ssrf-guard';
 import { incrementWebhookDeliveryFailures } from '../../../common/metrics/webhook-delivery-metrics';
@@ -56,6 +57,8 @@ export class WebhookProcessor extends WorkerHost {
     private readonly webhookRepository: Repository<Webhook>,
     @InjectRepository(WebhookDeliveryFailure, 'data')
     private readonly failureRepository: Repository<WebhookDeliveryFailure>,
+    @InjectRepository(WebhookDelivery, 'data')
+    private readonly deliveryRepository: Repository<WebhookDelivery>,
     private readonly hookManager: HookManager,
     private readonly configService: ConfigService,
   ) {
@@ -85,8 +88,8 @@ export class WebhookProcessor extends WorkerHost {
     const ctx: WebhookDeliveryContext = { job, webhookId, url, event, payload, maxRetries, sessionId, startTime };
 
     try {
-      const { status, responseTime } = await this.postToReceiver(ctx, requestHeaders);
-      await this.recordSuccessfulDelivery(ctx, status, responseTime);
+      const { status, statusText, responseTime } = await this.postToReceiver(ctx, requestHeaders);
+      await this.recordSuccessfulDelivery(ctx, status, statusText, responseTime);
       return {
         statusCode: status,
         success: true,
@@ -101,14 +104,15 @@ export class WebhookProcessor extends WorkerHost {
 
   /**
    * POST the payload to the receiver through the SSRF-guarded fetch and classify the response:
-   * a non-ok status throws into the failure path. Returns the status and measured response time.
+   * a non-ok status throws into the failure path. Returns the status/statusText and measured
+   * response time.
    */
   private async postToReceiver(
     ctx: WebhookDeliveryContext,
     requestHeaders: Record<string, string>,
-  ): Promise<{ status: number; responseTime: number }> {
+  ): Promise<{ status: number; statusText: string; responseTime: number }> {
     const { url, payload, startTime } = ctx;
-    const { status } = await postWebhookPayload(
+    const { status, statusText } = await postWebhookPayload(
       url,
       JSON.stringify(payload),
       requestHeaders,
@@ -117,7 +121,7 @@ export class WebhookProcessor extends WorkerHost {
     );
 
     const responseTime = Date.now() - startTime;
-    return { status, responseTime };
+    return { status, statusText, responseTime };
   }
 
   /**
@@ -127,9 +131,23 @@ export class WebhookProcessor extends WorkerHost {
   private async recordSuccessfulDelivery(
     ctx: WebhookDeliveryContext,
     status: number,
+    statusText: string,
     responseTime: number,
   ): Promise<void> {
-    const { job, webhookId, event, payload, sessionId } = ctx;
+    const { job, webhookId, url, event, payload, sessionId } = ctx;
+    void recordDeliveryAttempt(this.deliveryRepository, this.logger, {
+      webhookId,
+      sessionId,
+      event,
+      url,
+      requestPayload: payload,
+      responseStatus: status,
+      responseBody: statusText,
+      success: true,
+      attempt: job.attemptsMade + 1,
+      durationMs: responseTime,
+      error: null,
+    });
     // The receiver already answered 2xx — the delivery SUCCEEDED. Everything up to the return is
     // bookkeeping and must never throw back into the failure path: a rethrow would make BullMQ
     // retry (a duplicate POST for an already-delivered event) and, on the final attempt, file a
@@ -182,6 +200,20 @@ export class WebhookProcessor extends WorkerHost {
     const responseTime = Date.now() - startTime;
     const errorMessage = error instanceof Error ? error.message : String(error);
     const isFinalAttempt = job.attemptsMade + 1 >= maxRetries;
+
+    void recordDeliveryAttempt(this.deliveryRepository, this.logger, {
+      webhookId,
+      sessionId,
+      event,
+      url,
+      requestPayload: payload,
+      responseStatus: statusCodeFromError(errorMessage),
+      responseBody: errorMessage,
+      success: false,
+      attempt: job.attemptsMade + 1,
+      durationMs: responseTime,
+      error: errorMessage,
+    });
 
     this.logger.error(`Webhook delivery failed`, errorMessage, {
       webhookId,
@@ -249,6 +281,20 @@ export class WebhookProcessor extends WorkerHost {
 
     const { webhookId, url, event, payload } = job.data;
     const sessionId = payload.sessionId;
+
+    void recordDeliveryAttempt(this.deliveryRepository, this.logger, {
+      webhookId,
+      sessionId,
+      event,
+      url,
+      requestPayload: payload,
+      responseStatus: null,
+      responseBody: null,
+      success: false,
+      attempt: job.attemptsMade,
+      durationMs: 0,
+      error: error.message,
+    });
 
     this.logger.error('Webhook job failed after stalling beyond the recovery limit', error.message, {
       webhookId,

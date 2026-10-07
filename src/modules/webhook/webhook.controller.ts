@@ -1,7 +1,8 @@
-import { Controller, Get, Post, Put, Delete, Param, Body, HttpCode, HttpStatus } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
+import { Controller, Get, Post, Put, Delete, Param, Body, Query, HttpCode, HttpStatus } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiQuery } from '@nestjs/swagger';
 import { WebhookService } from './webhook.service';
-import { CreateWebhookDto, UpdateWebhookDto, WebhookResponseDto, WebhookTestResponseDto } from './dto';
+import { CreateWebhookDto, UpdateWebhookDto, WebhookResponseDto, WebhookTestResponseDto, WebhookDeliveryDto } from './dto';
+import { WebhookDelivery } from './entities/webhook-delivery.entity';
 import { RequireRole } from '../auth/decorators/auth.decorators';
 import { ApiKeyRole } from '../auth/entities/api-key.entity';
 
@@ -35,6 +36,24 @@ export class WebhookController {
   })
   async findBySession(@Param('sessionId') sessionId: string): Promise<WebhookResponseDto[]> {
     return WebhookResponseDto.fromEntities(await this.webhookService.findBySession(sessionId));
+  }
+
+  @Get('deliveries')
+  @RequireRole(ApiKeyRole.OPERATOR)
+  @ApiOperation({ summary: 'List logged webhook delivery attempts for the session (success and failure), most recent first' })
+  @ApiParam({ name: 'sessionId', description: 'Session ID' })
+  @ApiResponse({ status: 200, description: 'Delivery attempts', type: [WebhookDeliveryDto] })
+  @ApiQuery({ name: 'limit', required: false, description: 'Max records to return (1-1000, default 1000)' })
+  @ApiQuery({ name: 'offset', required: false, description: 'Number of records to skip (for paging)' })
+  async deliveries(
+    @Param('sessionId') sessionId: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ): Promise<WebhookDelivery[]> {
+    return this.webhookService.listDeliveries(sessionId, {
+      limit: limit ? parseInt(limit, 10) : undefined,
+      offset: offset ? parseInt(offset, 10) : undefined,
+    });
   }
 
   @Get(':id')

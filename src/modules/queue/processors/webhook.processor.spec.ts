@@ -4,6 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import { WebhookProcessor } from './webhook.processor';
 import { Webhook } from '../../webhook/entities/webhook.entity';
 import { WebhookDeliveryFailure } from '../../webhook/entities/webhook-delivery-failure.entity';
+import { WebhookDelivery } from '../../webhook/entities/webhook-delivery.entity';
 import { HookManager } from '../../../core/hooks';
 import { WebhookJobData } from '../../webhook/webhook.service';
 import { getWebhookDeliveryFailuresTotal } from '../../../common/metrics/webhook-delivery-metrics';
@@ -24,6 +25,7 @@ describe('WebhookProcessor', () => {
   let processor: WebhookProcessor;
   let repo: { update: jest.Mock };
   let failureRepo: { insert: jest.Mock; count: jest.Mock };
+  let deliveryRepo: { insert: jest.Mock };
   let hookManager: { execute: jest.Mock };
   let configService: { get: jest.Mock };
   let mockFetch: jest.Mock;
@@ -72,11 +74,13 @@ describe('WebhookProcessor', () => {
           ),
         ),
     };
+    deliveryRepo = { insert: jest.fn().mockResolvedValue({}) };
     hookManager = { execute: jest.fn().mockResolvedValue({ continue: true, data: {} }) };
     configService = { get: jest.fn((key: string, def?: unknown) => (key === 'webhook.timeout' ? 25000 : def)) };
     processor = new WebhookProcessor(
       repo as unknown as Repository<Webhook>,
       failureRepo as unknown as Repository<WebhookDeliveryFailure>,
+      deliveryRepo as unknown as Repository<WebhookDelivery>,
       hookManager as unknown as HookManager,
       configService as unknown as ConfigService,
     );

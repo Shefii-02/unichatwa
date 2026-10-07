@@ -10,6 +10,7 @@ import { IngressProcessor } from './processors/ingress.processor';
 import { QUEUE_NAMES } from './queue-names';
 import { Webhook } from '../webhook/entities/webhook.entity';
 import { WebhookDeliveryFailure } from '../webhook/entities/webhook-delivery-failure.entity';
+import { WebhookDelivery } from '../webhook/entities/webhook-delivery.entity';
 import { IntegrationDeliveryFailure } from '../integration/entities/integration-delivery-failure.entity';
 import { HooksModule } from '../../core/hooks/hooks.module';
 import { PluginsModule } from '../../core/plugins/plugins.module';
@@ -30,9 +31,10 @@ export const WEBHOOK_QUEUE_JOB_OPTIONS = {
 
 @Module({
   imports: [
-    // Required for WebhookProcessor to inject Repository<Webhook> + Repository<WebhookDeliveryFailure>;
-    // IngressProcessor to inject Repository<IntegrationDeliveryFailure> (both on the 'data' connection).
-    TypeOrmModule.forFeature([Webhook, WebhookDeliveryFailure, IntegrationDeliveryFailure], 'data'),
+    // Required for WebhookProcessor to inject Repository<Webhook> + Repository<WebhookDeliveryFailure>
+    // + Repository<WebhookDelivery>; IngressProcessor to inject Repository<IntegrationDeliveryFailure>
+    // (all on the 'data' connection).
+    TypeOrmModule.forFeature([Webhook, WebhookDeliveryFailure, WebhookDelivery, IntegrationDeliveryFailure], 'data'),
     // Required for WebhookProcessor/IngressProcessor to inject HookManager
     HooksModule,
     // Required for IngressProcessor to inject PluginLoaderService (already @Global(), imported
