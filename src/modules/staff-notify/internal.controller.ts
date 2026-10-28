@@ -1,5 +1,6 @@
 import { Controller, Post, Body, Headers, UnauthorizedException, Logger } from '@nestjs/common';
 import { StaffNotifyGateway } from './staff-notify.gateway';
+import { WidgetVisitorGateway } from './widget-visitor.gateway';
 import { MysqlService } from '../wa-chat/mysql.service';
 
 interface EmitPayload {
@@ -19,6 +20,7 @@ export class InternalController {
 
   constructor(
     private readonly gateway: StaffNotifyGateway,
+    private readonly visitors: WidgetVisitorGateway,
     private readonly db: MysqlService,
   ) {}
 
@@ -65,5 +67,31 @@ export class InternalController {
 
     this.logger.log(`emit ${type} → staff ${staff_id}: ${delivered ? 'delivered' : 'offline'}`);
     return { ok: true, delivered };
+  }
+
+  /** Called by Laravel to broadcast an event to every connected staff socket of a company. */
+  @Post('emit-company')
+  emitCompany(
+    @Headers('x-internal-key') key: string,
+    @Body() body: { type: string; company_id: number; data: unknown },
+  ): { ok: boolean } {
+    this.checkAuth(key);
+    const companyId = Number(body.company_id);
+    if (!companyId || !body.type) return { ok: false };
+    this.gateway.emitToCompany(companyId, body.type, body.data);
+    return { ok: true };
+  }
+
+  /** Called by Laravel to ping the visitor of one website-chat conversation. */
+  @Post('emit-widget-visitor')
+  emitWidgetVisitor(
+    @Headers('x-internal-key') key: string,
+    @Body() body: { conversation_id: number },
+  ): { ok: boolean } {
+    this.checkAuth(key);
+    const id = Number(body.conversation_id);
+    if (!id) return { ok: false };
+    this.visitors.emitToConversation(id, 'widget_update', {});
+    return { ok: true };
   }
 }

@@ -93,6 +93,8 @@ export class StaffNotifyGateway implements OnGatewayConnection, OnGatewayDisconn
     (client.data as AuthenticatedSocketData).staffId = staffId;
     (client.data as AuthenticatedSocketData).companyId = companyId;
     this.staffSockets.set(staffId, client.id);
+    // Company room — every tab/device of every staff member in the company, for broadcast events (e.g. website chat updates).
+    await client.join(`company:${companyId}`);
 
     await this.db.execute(
       `INSERT INTO staff_availability (company_id, staff_id, is_online, status, last_seen_at, created_at, updated_at)
@@ -131,6 +133,11 @@ export class StaffNotifyGateway implements OnGatewayConnection, OnGatewayDisconn
       [staffId],
     );
     this.logger.log(`Staff ${staffId} went offline (explicit)`);
+  }
+
+  /** Emit a named event to every connected staff socket of one company. */
+  emitToCompany(companyId: number, event: string, data: unknown): void {
+    this.server.to(`company:${companyId}`).emit(event, data);
   }
 
   /**
