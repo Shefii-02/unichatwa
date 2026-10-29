@@ -48,6 +48,7 @@ import { SearchModule } from './modules/search/search.module';
 import { SqlitePermissionsBoot } from './database/sqlite-file-permissions';
 import { WaChatModule } from './modules/wa-chat/wa-chat.module';
 import { StaffNotifyModule } from './modules/staff-notify/staff-notify.module';
+import { WidgetChatModule } from './modules/widget-chat/widget-chat.module';
 
 // Only import QueueModule if explicitly enabled to avoid Redis connection errors
 const queueModules: Array<Type | DynamicModule> = [];
@@ -375,6 +376,7 @@ if (dashboardServingEnabled && dashboardBuildPresent) {
     ...serveStaticModules, // Bundled dashboard SPA (production single-port setup)
     WaChatModule, // Shared MySQL auth + message log service
     StaffNotifyModule, // Staff availability + lead notification socket events
+    WidgetChatModule, // Website live chat — staff REST API (shared MySQL tables) + socket events
   ],
   // Runs after every DataSource has initialized (they initialize eagerly in their provider
   // factories, and onApplicationBootstrap fires after every onModuleInit), tightening the SQLite

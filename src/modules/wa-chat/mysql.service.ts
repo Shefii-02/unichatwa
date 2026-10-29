@@ -35,6 +35,13 @@ export class MysqlService implements OnModuleDestroy {
     await this.getPool().execute(sql, values);
   }
 
+  /** Like execute(), but returns the write result (affected rows / insert id) — for atomic claims and inserts. */
+  async run(sql: string, values: SqlParam[] = []): Promise<{ affectedRows: number; insertId: number }> {
+    const [res] = await this.getPool().execute(sql, values);
+    const r = res as mysql.ResultSetHeader;
+    return { affectedRows: r.affectedRows, insertId: r.insertId };
+  }
+
   async onModuleDestroy(): Promise<void> {
     if (this.pool) {
       await this.pool.end();

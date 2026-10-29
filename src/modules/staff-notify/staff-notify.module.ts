@@ -8,6 +8,6 @@ import { WaChatModule } from '../wa-chat/wa-chat.module';
   imports: [WaChatModule],
   providers: [StaffNotifyGateway, WidgetVisitorGateway],
   controllers: [InternalController],
-  exports: [StaffNotifyGateway],
+  exports: [StaffNotifyGateway, WidgetVisitorGateway],
 })
 export class StaffNotifyModule {}

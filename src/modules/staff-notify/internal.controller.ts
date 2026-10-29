@@ -1,3 +1,4 @@
+import { Public } from '../auth/decorators/auth.decorators';
 import { Controller, Post, Body, Headers, UnauthorizedException, Logger } from '@nestjs/common';
 import { StaffNotifyGateway } from './staff-notify.gateway';
 import { WidgetVisitorGateway } from './widget-visitor.gateway';
@@ -14,7 +15,10 @@ interface StaffOnlinePayload {
   company_id: number;
 }
 
-@Controller('api/internal')
+// Global prefix `api` is added by Nest → /api/internal/*. Public to the API-key guard because it is
+// authenticated by the shared X-Internal-Key (checkAuth) — Laravel has no per-company OpenWA key.
+@Public()
+@Controller('internal')
 export class InternalController {
   private readonly logger = new Logger(InternalController.name);
 
