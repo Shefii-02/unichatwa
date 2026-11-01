@@ -761,7 +761,28 @@ export class MessageSendService {
     if (error instanceof HttpException) {
       return error;
     }
-    return new BadRequestException(error instanceof Error ? error.message : String(error));
+    return new BadRequestException(this.describeEngineError(error));
+  }
+
+  /**
+   * A human-readable reason for an engine send failure. Some engine/library errors carry an EMPTY
+   * message (a bare `new Error()`, or an object whose detail lives on `.output.payload` / `.data`),
+   * and `new BadRequestException('')` then serialises to the content-free `{"message":"Bad Request"}` —
+   * the caller (and the dashboard toast) can't tell a dead session from an unreachable recipient.
+   * The full error, with its stack, is logged here so the real cause is findable in the server log.
+   */
+  private describeEngineError(error: unknown): string {
+    const raw = error instanceof Error ? error.message : typeof error === 'string' ? error : '';
+    const boom = (error as { output?: { payload?: { message?: unknown } } } | null)?.output?.payload?.message;
+    const named = error instanceof Error && error.name && error.name !== 'Error' ? error.name : '';
+    const detail = (raw && raw.trim()) || (typeof boom === 'string' && boom.trim()) || named;
+    if (!detail) {
+      this.logger.error(
+        `Engine send failed with no error message: ${error instanceof Error ? (error.stack ?? error.name) : JSON.stringify(error)}`,
+      );
+      return 'WhatsApp rejected the message without saying why. Check the session is connected and the chat is valid, then try again.';
+    }
+    return detail;
   }
 
   private buildMediaInput(dto: SendMediaMessageDto): MediaInput {

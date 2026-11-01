@@ -623,6 +623,26 @@ describe('MessageSendService', () => {
       ).rejects.toMatchObject({ response: { message: 'Destination address is not allowed' } });
     });
 
+    it('turns an engine error with an EMPTY message into a readable 400 instead of a bare "Bad Request"', async () => {
+      mockEngine.sendTextMessage.mockRejectedValueOnce(new Error(''));
+      await expect(service.sendText('sess-1', { chatId: '155306185211963@lid', text: 'hi' })).rejects.toMatchObject({
+        response: { message: expect.stringContaining('rejected the message without saying why') },
+      });
+    });
+
+    it('uses a Boom-style payload message or the error name when .message is empty', async () => {
+      const boom = Object.assign(new Error(''), { output: { payload: { message: 'Connection Closed' } } });
+      mockEngine.sendTextMessage.mockRejectedValueOnce(boom);
+      await expect(service.sendText('sess-1', { chatId: '1@c.us', text: 'hi' })).rejects.toMatchObject({
+        response: { message: 'Connection Closed' },
+      });
+      class WidgetError extends Error { constructor() { super(''); this.name = 'WidgetError'; } }
+      mockEngine.sendTextMessage.mockRejectedValueOnce(new WidgetError());
+      await expect(service.sendText('sess-1', { chatId: '1@c.us', text: 'hi' })).rejects.toMatchObject({
+        response: { message: 'WidgetError' },
+      });
+    });
+
     it('does not leak the SSRF internal address into the message:failed hook payload (media sends now route there)', async () => {
       mockEngine.sendImageMessage.mockRejectedValueOnce(
         new SsrfBlockedError('Host x resolves to a blocked internal address: 169.254.169.254'),
