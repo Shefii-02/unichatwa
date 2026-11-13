@@ -5,7 +5,7 @@ import { WidgetVisitorGateway } from '../staff-notify/widget-visitor.gateway';
 import { StaffIdentity } from './staff-auth.service';
 import { dt, nowLocal, toIso } from './time.util';
 
-export type InboxTab = 'unread' | 'read' | 'closed';
+export type InboxTab = 'all' | 'unread' | 'read' | 'closed';
 
 interface MessageRow {
   id: number; role: string; type: string | null; text: string | null;
@@ -97,7 +97,7 @@ export class WidgetChatService {
 
   // ── reads ────────────────────────────────────────────────────────────────
   async inbox(staff: StaffIdentity, q: { tab?: string; q?: string; page?: unknown; per_page?: unknown; widget_id?: unknown }) {
-    const tab: InboxTab = q.tab === 'read' || q.tab === 'closed' ? q.tab : 'unread';
+    const tab: InboxTab = q.tab === 'read' || q.tab === 'closed' || q.tab === 'all' ? q.tab : 'unread';
     const page = int(q.page, 1, 1, 100000);
     const perPage = int(q.per_page, 30, 1, 100);
     const where: string[] = ['wc.company_id = ?', 'EXISTS (SELECT 1 FROM widget_messages x WHERE x.widget_conversation_id = wc.id)'];
@@ -117,7 +117,7 @@ export class WidgetChatService {
     }
     const base = where.join(' AND ');
 
-    const tabCond = tab === 'closed' ? CLOSED : tab === 'read' ? `NOT ${CLOSED} AND NOT ${UNREAD}` : `NOT ${CLOSED} AND ${UNREAD}`;
+    const tabCond = tab === 'all' ? '1 = 1' : tab === 'closed' ? CLOSED : tab === 'read' ? `NOT ${CLOSED} AND NOT ${UNREAD}` : `NOT ${CLOSED} AND ${UNREAD}`;
     const offset = (page - 1) * perPage;
 
     const [rows, counts] = await Promise.all([
@@ -132,8 +132,8 @@ export class WidgetChatService {
           ORDER BY wc.last_message_at DESC, wc.id DESC LIMIT ${perPage + 1} OFFSET ${offset}`,
         params,
       ),
-      this.db.query<{ closed: string; unread: string; read: string }>(
-        `SELECT COALESCE(SUM(${CLOSED}), 0) AS closed,
+      this.db.query<{ all: string; closed: string; unread: string; read: string }>(
+        `SELECT COUNT(*) AS \`all\`, COALESCE(SUM(${CLOSED}), 0) AS closed,
                 COALESCE(SUM(NOT ${CLOSED} AND ${UNREAD}), 0) AS unread,
                 COALESCE(SUM(NOT ${CLOSED} AND NOT ${UNREAD}), 0) AS \`read\`
            FROM widget_conversations wc WHERE ${base}`,
@@ -148,7 +148,7 @@ export class WidgetChatService {
       widget: { id: r.chat_widget_id, name: r.widget_name },
     }));
     const c = counts[0];
-    return { data, page, per_page: perPage, has_more: hasMore, counts: { unread: Number(c.unread), read: Number(c.read), closed: Number(c.closed) } };
+    return { data, page, per_page: perPage, has_more: hasMore, counts: { all: Number(c.all), unread: Number(c.unread), read: Number(c.read), closed: Number(c.closed) } };
   }
 
   /** Conversation + its messages after `after` (or the latest `limit` when after=0). Opening a chat marks it read. */
