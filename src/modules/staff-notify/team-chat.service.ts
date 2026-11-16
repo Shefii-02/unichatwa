@@ -1,5 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { MysqlService } from '../wa-chat/mysql.service';
+import { nowLocal, toIso } from '../widget-chat/time.util';
+
+/** Quoted "now" in the Laravel app timezone — Laravel and Node must write the same wall-clock into shared DATETIME columns. */
+const NOW = (): string => `'${nowLocal()}'`;
 
 /** Emits a named event to one staff member (every device). Provided by the gateway so this service stays socket-agnostic. */
 export type StaffEmitter = (staffId: number, event: string, data: unknown) => void;
@@ -88,7 +92,7 @@ export class TeamChatService {
    */
   private async formatForViewers(messageId: number, viewers: number[]): Promise<Map<number, Record<string, unknown>>> {
     const out = new Map<number, Record<string, unknown>>();
-    const rows = await this.db.query<Record<string, any>>('SELECT * FROM team_chat_messages WHERE id = ? LIMIT 1', [messageId]);
+    const rows = await this.db.query<Record<string, any>>("SELECT *, DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS created_at_s FROM team_chat_messages WHERE id = ? LIMIT 1", [messageId]);
     const m = rows[0];
     if (!m || !viewers.length) return out;
 
@@ -156,7 +160,7 @@ export class TeamChatService {
       seen_by_count: Number(st[0]?.seen ?? 0),
       delivered_count: Number(st[0]?.delivered ?? 0),
       recipients: Number(st[0]?.recipients ?? 0),
-      created_at: m.created_at instanceof Date ? m.created_at.toISOString() : m.created_at,
+      created_at: toIso(m.created_at_s),
     };
     for (const v of viewers) {
       out.set(v, {
@@ -169,6 +173,16 @@ export class TeamChatService {
       });
     }
     return out;
+  }
+
+  /** A centred "X created the group" style line; shown to every member immediately. */
+  async systemMessage(chatId: number, companyId: number, by: number, text: string): Promise<void> {
+    const res = await this.db.run(
+      `INSERT INTO team_chat_messages (chat_id, company_id, sender_id, type, body, created_at, updated_at) VALUES (?,?,NULL,'system',?,${NOW()},${NOW()})`,
+      [chatId, companyId, text],
+    );
+    await this.db.execute(`UPDATE team_chats SET last_message_id = ?, last_message_at = ${NOW()} WHERE id = ?`, [res.insertId, chatId]);
+    this.background(this.fanout(chatId, by, 'system', { message_id: res.insertId }));
   }
 
   private preview(m: Record<string, any>): string {
@@ -205,7 +219,7 @@ export class TeamChatService {
     if (toInclusive <= fromExclusive) return;
     await this.db.execute(
       `INSERT INTO team_chat_receipts (message_id, user_id, delivered_at, read_at)
-       SELECT id, ?, NOW(), ${read ? 'NOW()' : 'NULL'} FROM team_chat_messages
+       SELECT id, ?, ${NOW()}, ${read ? NOW() : 'NULL'} FROM team_chat_messages
         WHERE chat_id = ? AND id > ? AND id <= ? AND type <> 'system' AND (sender_id IS NULL OR sender_id <> ?)
        ON DUPLICATE KEY UPDATE delivered_at = COALESCE(delivered_at, VALUES(delivered_at))${read ? ', read_at = COALESCE(read_at, VALUES(read_at))' : ''}`,
       [userId, chatId, fromExclusive, toInclusive, userId],
@@ -262,14 +276,14 @@ export class TeamChatService {
       const res = await this.db.run(
         `INSERT INTO team_chat_messages
            (chat_id, company_id, sender_id, type, body, latitude, longitude, location_label, contact_name, contact_phone, reply_to_id, mentions, client_id, created_at, updated_at)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,NOW(),NOW())`,
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,${NOW()},${NOW()})`,
         [chatId, me.company_id, staffId, type, body || null,
           isLocation ? p.latitude! : null, isLocation ? p.longitude! : null, isLocation ? (p.location_label ?? null) : null,
           isContact ? p.contact_name!.trim().slice(0, 120) : null, isContact ? (p.contact_phone ?? '').slice(0, 40) : null,
           replyTo, mentions.length ? JSON.stringify(mentions) : null, clientId],
       );
       const id = res.insertId;
-      await this.db.execute('UPDATE team_chats SET last_message_id = ?, last_message_at = NOW() WHERE id = ?', [id, chatId]);
+      await this.db.execute(`UPDATE team_chats SET last_message_id = ?, last_message_at = ${NOW()} WHERE id = ?`, [id, chatId]);
       await this.db.execute('UPDATE team_chat_members SET last_read_message_id = ? WHERE chat_id = ? AND user_id = ?', [id, chatId, staffId]);
 
       this.background(this.fanout(chatId, staffId, 'message', { message_id: id }, id));
@@ -292,7 +306,7 @@ export class TeamChatService {
       if (Number(m.sender_id) !== staffId || m.deleted_at || m.type !== 'text') throw new Error('You can only edit your own text messages.');
       const text = String(body ?? '').trim().slice(0, 4000);
       if (!text) throw new Error('Message cannot be empty.');
-      await this.db.execute('UPDATE team_chat_messages SET body = ?, edited_at = NOW(), updated_at = NOW() WHERE id = ?', [text, m.id]);
+      await this.db.execute(`UPDATE team_chat_messages SET body = ?, edited_at = ${NOW()}, updated_at = ${NOW()} WHERE id = ?`, [text, m.id]);
       this.background(this.fanout(Number(m.chat_id), staffId, 'edit', { message_id: Number(m.id) }));
       return {};
     });
@@ -303,11 +317,11 @@ export class TeamChatService {
     return this.safe(async () => {
       const { m, me } = await this.ownMessage(staffId, Number(messageId));
       if (scope === 'me') {
-        await this.db.execute('INSERT IGNORE INTO team_chat_hides (message_id, user_id, created_at) VALUES (?,?,NOW())', [m.id, staffId]);
+        await this.db.execute(`INSERT IGNORE INTO team_chat_hides (message_id, user_id, created_at) VALUES (?,?,${NOW()})`, [m.id, staffId]);
         return {};
       }
       if (Number(m.sender_id) !== staffId && !(me.type === 'group' && me.role === 'admin')) throw new Error('Not allowed.');
-      await this.db.execute('UPDATE team_chat_messages SET deleted_at = NOW(), deleted_by = ?, updated_at = NOW() WHERE id = ?', [staffId, m.id]);
+      await this.db.execute(`UPDATE team_chat_messages SET deleted_at = ${NOW()}, deleted_by = ?, updated_at = ${NOW()} WHERE id = ?`, [staffId, m.id]);
       this.background(this.fanout(Number(m.chat_id), staffId, 'delete', { message_id: Number(m.id) }));
       return {};
     });
@@ -320,7 +334,7 @@ export class TeamChatService {
       if (!e) throw new Error('Pick an emoji.');
       const ex = await this.db.query('SELECT id FROM team_chat_reactions WHERE message_id = ? AND user_id = ? AND emoji = ? LIMIT 1', [m.id, staffId, e]);
       if (ex.length) await this.db.execute('DELETE FROM team_chat_reactions WHERE message_id = ? AND user_id = ? AND emoji = ?', [m.id, staffId, e]);
-      else await this.db.execute('INSERT INTO team_chat_reactions (message_id, user_id, emoji, created_at) VALUES (?,?,?,NOW())', [m.id, staffId, e]);
+      else await this.db.execute(`INSERT INTO team_chat_reactions (message_id, user_id, emoji, created_at) VALUES (?,?,?,${NOW()})`, [m.id, staffId, e]);
       this.background(this.fanout(Number(m.chat_id), staffId, 'reaction', { message_id: Number(m.id) }));
       return {};
     });
@@ -377,12 +391,12 @@ export class TeamChatService {
           `INSERT INTO team_chat_messages
              (chat_id, company_id, sender_id, type, body, attachment_url, attachment_name, attachment_size, attachment_mime,
               duration_seconds, latitude, longitude, location_label, contact_name, contact_phone, forwarded, created_at, updated_at)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1,NOW(),NOW())`,
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1,${NOW()},${NOW()})`,
           [cid, target.company_id, staffId, m.type, m.body, m.attachment_url, m.attachment_name, m.attachment_size, m.attachment_mime,
             m.duration_seconds, m.latitude, m.longitude, m.location_label, m.contact_name, m.contact_phone],
         );
         const id = res.insertId;
-        await this.db.execute('UPDATE team_chats SET last_message_id = ?, last_message_at = NOW() WHERE id = ?', [id, cid]);
+        await this.db.execute(`UPDATE team_chats SET last_message_id = ?, last_message_at = ${NOW()} WHERE id = ?`, [id, cid]);
         await this.db.execute('UPDATE team_chat_members SET last_read_message_id = ? WHERE chat_id = ? AND user_id = ?', [id, cid, staffId]);
         this.background(this.fanout(cid, staffId, 'message', { message_id: id }, id));
         this.pushViaLaravel(cid, id, staffId, []);
