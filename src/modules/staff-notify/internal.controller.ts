@@ -73,6 +73,19 @@ export class InternalController {
     return { ok: true, delivered };
   }
 
+  /** Called by Laravel to push one event to MANY staff in a single request (team-chat fan-out). */
+  @Post('emit-many')
+  emitMany(
+    @Headers('x-internal-key') key: string,
+    @Body() body: { type: string; staff_ids: number[]; data: unknown },
+  ): { ok: boolean; count: number } {
+    this.checkAuth(key);
+    if (!body.type || !Array.isArray(body.staff_ids)) return { ok: false, count: 0 };
+    let n = 0;
+    for (const id of body.staff_ids.slice(0, 500)) if (this.gateway.emitToStaff(Number(id), body.type, body.data)) n++;
+    return { ok: true, count: n };
+  }
+
   /** Called by Laravel to broadcast an event to every connected staff socket of a company. */
   @Post('emit-company')
   emitCompany(

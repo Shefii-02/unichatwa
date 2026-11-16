@@ -17,6 +17,8 @@ export interface SendPayload {
   body?: string | null;
   reply_to_id?: number | null;
   mentions?: number[];
+  /** Client-generated id: a retry of the same send (socket timeout → REST) returns the original message instead of duplicating it. */
+  client_id?: string;
   latitude?: number;
   longitude?: number;
   location_label?: string;
@@ -74,45 +76,58 @@ export class TeamChatService {
   }
 
   /** Message in the shape the app (and Laravel's REST `format()`) uses, personalised for `viewerId`. */
+  /** One message for one viewer (thin wrapper). */
   private async format(messageId: number, viewerId: number): Promise<Record<string, unknown> | null> {
+    return (await this.formatForViewers(messageId, [viewerId])).get(viewerId) ?? null;
+  }
+
+  /**
+   * Message in the shape the app uses, personalised per viewer — but built from ONE round of shared queries
+   * (message, reply, names, reactions, receipt totals, pin) plus a single stars lookup, instead of ~8 queries
+   * per viewer. This is what keeps sends fast in big groups.
+   */
+  private async formatForViewers(messageId: number, viewers: number[]): Promise<Map<number, Record<string, unknown>>> {
+    const out = new Map<number, Record<string, unknown>>();
     const rows = await this.db.query<Record<string, any>>('SELECT * FROM team_chat_messages WHERE id = ? LIMIT 1', [messageId]);
     const m = rows[0];
-    if (!m) return null;
+    if (!m || !viewers.length) return out;
+
+    const [replyRows, reacts, st, pin, stars] = await Promise.all([
+      m.reply_to_id ? this.db.query<Record<string, any>>('SELECT * FROM team_chat_messages WHERE id = ? LIMIT 1', [m.reply_to_id]) : Promise.resolve([]),
+      this.db.query<{ emoji: string; user_id: number }>('SELECT emoji, user_id FROM team_chat_reactions WHERE message_id = ?', [messageId]),
+      // seen = read; delivered = reached the device (or read); recipients = everyone except the sender.
+      this.db.query<{ recipients: number; seen: number; delivered: number }>(
+        `SELECT COUNT(*) AS recipients,
+                SUM(last_read_message_id >= ?) AS seen,
+                SUM(GREATEST(last_delivered_message_id, last_read_message_id) >= ?) AS delivered
+           FROM team_chat_members WHERE chat_id = ? AND left_at IS NULL AND user_id <> ?`,
+        [m.id, m.id, m.chat_id, m.sender_id ?? 0],
+      ),
+      this.db.query('SELECT 1 FROM team_chat_pins WHERE message_id = ? LIMIT 1', [m.id]),
+      this.db.query<{ user_id: number }>(`SELECT user_id FROM team_chat_stars WHERE message_id = ? AND user_id IN (${viewers.map(() => '?').join(',')})`, [m.id, ...viewers]),
+    ])
+    const reply = (replyRows as Record<string, any>[])[0] ?? null;
+    const nameIds = [m.sender_id, reply?.sender_id, m.deleted_by].filter(Boolean).map(Number);
     const names = new Map<number, string>();
-    const ids = [m.sender_id].filter(Boolean);
-    let reply: Record<string, any> | null = null;
-    if (m.reply_to_id) {
-      const r = await this.db.query<Record<string, any>>('SELECT * FROM team_chat_messages WHERE id = ? LIMIT 1', [m.reply_to_id]);
-      reply = r[0] ?? null;
-      if (reply?.sender_id) ids.push(reply.sender_id);
-    }
-    if (ids.length) {
-      const u = await this.db.query<{ id: number; name: string }>(`SELECT id, name FROM users WHERE id IN (${ids.map(() => '?').join(',')})`, ids);
+    if (nameIds.length) {
+      const u = await this.db.query<{ id: number; name: string }>(`SELECT id, name FROM users WHERE id IN (${nameIds.map(() => '?').join(',')})`, nameIds);
       u.forEach((x) => names.set(Number(x.id), x.name));
     }
-    const reacts = await this.db.query<{ emoji: string; user_id: number }>('SELECT emoji, user_id FROM team_chat_reactions WHERE message_id = ?', [messageId]);
-    const grouped = new Map<string, { count: number; mine: boolean }>();
+
+    const grouped = new Map<string, { count: number; mineBy: Set<number> }>();
     for (const r of reacts) {
-      const g = grouped.get(r.emoji) ?? { count: 0, mine: false };
+      const g = grouped.get(r.emoji) ?? { count: 0, mineBy: new Set<number>() };
       g.count++;
-      if (Number(r.user_id) === viewerId) g.mine = true;
+      g.mineBy.add(Number(r.user_id));
       grouped.set(r.emoji, g);
     }
-    // seen = read; delivered = reached the device (or read); recipients = everyone except the sender.
-    const st = await this.db.query<{ recipients: number; seen: number; delivered: number }>(
-      `SELECT COUNT(*) AS recipients,
-              SUM(last_read_message_id >= ?) AS seen,
-              SUM(GREATEST(last_delivered_message_id, last_read_message_id) >= ?) AS delivered
-         FROM team_chat_members WHERE chat_id = ? AND left_at IS NULL AND user_id <> ?`,
-      [m.id, m.id, m.chat_id, m.sender_id ?? 0],
-    );
+    const starredBy = new Set(stars.map((x) => Number(x.user_id)));
     const deleted = !!m.deleted_at;
-    return {
+    const base = {
       id: m.id,
       type: m.type,
       sender_id: m.sender_id,
       sender_name: m.sender_id ? (names.get(Number(m.sender_id)) ?? '') : null,
-      mine: Number(m.sender_id) === viewerId,
       body: deleted ? null : m.body,
       deleted,
       edited: !!m.edited_at,
@@ -137,18 +152,23 @@ export class TeamChatService {
             thumb: reply.type === 'image' && !reply.deleted_at ? reply.attachment_url : null,
           }
         : null,
-      starred: (await this.db.query('SELECT 1 FROM team_chat_stars WHERE message_id = ? AND user_id = ? LIMIT 1', [m.id, viewerId])).length > 0,
-      pinned: (await this.db.query('SELECT 1 FROM team_chat_pins WHERE message_id = ? LIMIT 1', [m.id])).length > 0,
-      // Only the sender learns who removed their message (company admins read the original through Laravel).
-      deleted_by_name: deleted && Number(m.sender_id) === viewerId && m.deleted_by
-        ? ((await this.db.query<{ name: string }>('SELECT name FROM users WHERE id = ? LIMIT 1', [m.deleted_by]))[0]?.name ?? null)
-        : null,
-      reactions: [...grouped.entries()].map(([emoji, g]) => ({ emoji, count: g.count, mine: g.mine })),
+      pinned: pin.length > 0,
       seen_by_count: Number(st[0]?.seen ?? 0),
       delivered_count: Number(st[0]?.delivered ?? 0),
       recipients: Number(st[0]?.recipients ?? 0),
       created_at: m.created_at instanceof Date ? m.created_at.toISOString() : m.created_at,
     };
+    for (const v of viewers) {
+      out.set(v, {
+        ...base,
+        mine: Number(m.sender_id) === v,
+        starred: starredBy.has(v),
+        // Only the sender learns who removed their message (company admins read the original through Laravel).
+        deleted_by_name: deleted && Number(m.sender_id) === v && m.deleted_by ? (names.get(Number(m.deleted_by)) ?? null) : null,
+        reactions: [...grouped.entries()].map(([emoji, g]) => ({ emoji, count: g.count, mine: g.mineBy.has(v) })),
+      });
+    }
+    return out;
   }
 
   private preview(m: Record<string, any>): string {
@@ -166,11 +186,18 @@ export class TeamChatService {
 
   /** Tell every member (all their devices): `{chat_id, kind, message?}` — `message` is personalised per viewer. */
   private async fanout(chatId: number, by: number, kind: string, extra: Record<string, unknown> = {}, withMessageId?: number): Promise<void> {
-    for (const uid of await this.memberIds(chatId)) {
+    const members = await this.memberIds(chatId);
+    const per = withMessageId ? await this.formatForViewers(withMessageId, members) : null;
+    for (const uid of members) {
       const payload: Record<string, unknown> = { chat_id: chatId, kind, by, ...extra };
-      if (withMessageId) payload.message = await this.format(withMessageId, uid);
+      if (per) payload.message = per.get(uid) ?? null;
       this.emitter(uid, 'team_chat', payload);
     }
+  }
+
+  /** Fire-and-forget fan-out: the sender's ack must never wait on delivering to everyone else. */
+  private background(p: Promise<unknown>): void {
+    p.catch((e) => this.logger.warn(`team-chat fanout failed: ${(e as Error).message}`));
   }
 
   /** Per-message delivered / read times (message info screen) for everything between the old and new marker. */
@@ -205,6 +232,11 @@ export class TeamChatService {
       const me = await this.member(chatId, staffId);
       if (me.type === 'group' && me.only_admins_post && me.role !== 'admin') throw new Error('Only admins can post in this group.');
 
+      const clientId = typeof p.client_id === 'string' && p.client_id ? p.client_id.slice(0, 40) : null;
+      if (clientId) {
+        const dup = await this.db.query<{ id: number }>('SELECT id FROM team_chat_messages WHERE chat_id = ? AND sender_id = ? AND client_id = ? LIMIT 1', [chatId, staffId, clientId]);
+        if (dup.length) return { message: await this.format(Number(dup[0].id), staffId) };
+      }
       const body = typeof p.body === 'string' ? p.body.trim().slice(0, 4000) : '';
       const isLocation = typeof p.latitude === 'number' && typeof p.longitude === 'number'
         && Math.abs(p.latitude) <= 90 && Math.abs(p.longitude) <= 180;
@@ -229,18 +261,18 @@ export class TeamChatService {
 
       const res = await this.db.run(
         `INSERT INTO team_chat_messages
-           (chat_id, company_id, sender_id, type, body, latitude, longitude, location_label, contact_name, contact_phone, reply_to_id, mentions, created_at, updated_at)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,NOW(),NOW())`,
+           (chat_id, company_id, sender_id, type, body, latitude, longitude, location_label, contact_name, contact_phone, reply_to_id, mentions, client_id, created_at, updated_at)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,NOW(),NOW())`,
         [chatId, me.company_id, staffId, type, body || null,
           isLocation ? p.latitude! : null, isLocation ? p.longitude! : null, isLocation ? (p.location_label ?? null) : null,
           isContact ? p.contact_name!.trim().slice(0, 120) : null, isContact ? (p.contact_phone ?? '').slice(0, 40) : null,
-          replyTo, mentions.length ? JSON.stringify(mentions) : null],
+          replyTo, mentions.length ? JSON.stringify(mentions) : null, clientId],
       );
       const id = res.insertId;
       await this.db.execute('UPDATE team_chats SET last_message_id = ?, last_message_at = NOW() WHERE id = ?', [id, chatId]);
       await this.db.execute('UPDATE team_chat_members SET last_read_message_id = ? WHERE chat_id = ? AND user_id = ?', [id, chatId, staffId]);
 
-      await this.fanout(chatId, staffId, 'message', { message_id: id }, id);
+      this.background(this.fanout(chatId, staffId, 'message', { message_id: id }, id));
       this.pushViaLaravel(chatId, id, staffId, mentions);
       return { message: await this.format(id, staffId) };
     });
@@ -261,7 +293,7 @@ export class TeamChatService {
       const text = String(body ?? '').trim().slice(0, 4000);
       if (!text) throw new Error('Message cannot be empty.');
       await this.db.execute('UPDATE team_chat_messages SET body = ?, edited_at = NOW(), updated_at = NOW() WHERE id = ?', [text, m.id]);
-      await this.fanout(Number(m.chat_id), staffId, 'edit', { message_id: Number(m.id) });
+      this.background(this.fanout(Number(m.chat_id), staffId, 'edit', { message_id: Number(m.id) }));
       return {};
     });
   }
@@ -276,7 +308,7 @@ export class TeamChatService {
       }
       if (Number(m.sender_id) !== staffId && !(me.type === 'group' && me.role === 'admin')) throw new Error('Not allowed.');
       await this.db.execute('UPDATE team_chat_messages SET deleted_at = NOW(), deleted_by = ?, updated_at = NOW() WHERE id = ?', [staffId, m.id]);
-      await this.fanout(Number(m.chat_id), staffId, 'delete', { message_id: Number(m.id) });
+      this.background(this.fanout(Number(m.chat_id), staffId, 'delete', { message_id: Number(m.id) }));
       return {};
     });
   }
@@ -289,7 +321,7 @@ export class TeamChatService {
       const ex = await this.db.query('SELECT id FROM team_chat_reactions WHERE message_id = ? AND user_id = ? AND emoji = ? LIMIT 1', [m.id, staffId, e]);
       if (ex.length) await this.db.execute('DELETE FROM team_chat_reactions WHERE message_id = ? AND user_id = ? AND emoji = ?', [m.id, staffId, e]);
       else await this.db.execute('INSERT INTO team_chat_reactions (message_id, user_id, emoji, created_at) VALUES (?,?,?,NOW())', [m.id, staffId, e]);
-      await this.fanout(Number(m.chat_id), staffId, 'reaction', { message_id: Number(m.id) });
+      this.background(this.fanout(Number(m.chat_id), staffId, 'reaction', { message_id: Number(m.id) }));
       return {};
     });
   }
@@ -308,7 +340,7 @@ export class TeamChatService {
         'UPDATE team_chat_members SET last_read_message_id = ?, last_delivered_message_id = GREATEST(last_delivered_message_id, ?) WHERE chat_id = ? AND user_id = ?',
         [last, last, chatId, staffId],
       );
-      await this.fanout(Number(chatId), staffId, 'read', { last_id: last });
+      this.background(this.fanout(Number(chatId), staffId, 'read', { last_id: last }));
       return {};
     });
   }
@@ -328,7 +360,7 @@ export class TeamChatService {
         'UPDATE team_chat_members SET last_delivered_message_id = GREATEST(last_delivered_message_id, ?) WHERE chat_id = ? AND user_id = ?',
         [last, chatId, staffId],
       );
-      await this.fanout(Number(chatId), staffId, 'delivered', { last_id: last });
+      this.background(this.fanout(Number(chatId), staffId, 'delivered', { last_id: last }));
       return {};
     });
   }
@@ -352,7 +384,7 @@ export class TeamChatService {
         const id = res.insertId;
         await this.db.execute('UPDATE team_chats SET last_message_id = ?, last_message_at = NOW() WHERE id = ?', [id, cid]);
         await this.db.execute('UPDATE team_chat_members SET last_read_message_id = ? WHERE chat_id = ? AND user_id = ?', [id, cid, staffId]);
-        await this.fanout(cid, staffId, 'message', { message_id: id }, id);
+        this.background(this.fanout(cid, staffId, 'message', { message_id: id }, id));
         this.pushViaLaravel(cid, id, staffId, []);
       }
       return {};
