@@ -3,6 +3,7 @@ import {
   WebSocketServer,
   SubscribeMessage,
   ConnectedSocket,
+  MessageBody,
   OnGatewayConnection,
   OnGatewayDisconnect,
 } from '@nestjs/websockets';
@@ -10,6 +11,8 @@ import { Server, Socket } from 'socket.io';
 import { Logger } from '@nestjs/common';
 import * as jwt from 'jsonwebtoken';
 import { MysqlService } from '../wa-chat/mysql.service';
+import { TeamChatService } from './team-chat.service';
+import type { SendPayload } from './team-chat.service';
 
 interface AuthenticatedSocketData {
   staffId: number;
@@ -43,7 +46,13 @@ export class StaffNotifyGateway implements OnGatewayConnection, OnGatewayDisconn
   /** staffId → socket id */
   private readonly staffSockets = new Map<number, string>();
 
-  constructor(private readonly db: MysqlService) {}
+  constructor(
+    private readonly db: MysqlService,
+    private readonly teamChat: TeamChatService,
+  ) {
+    // Team chat fans out through this gateway's per-staff rooms (every device of a member gets it).
+    this.teamChat.setEmitter((staffId, event, data) => this.emitToStaff(staffId, event, data));
+  }
 
   async handleConnection(client: Socket): Promise<void> {
     const handshakeAuth = client.handshake.auth as { token?: string } | undefined;
@@ -95,6 +104,8 @@ export class StaffNotifyGateway implements OnGatewayConnection, OnGatewayDisconn
     this.staffSockets.set(staffId, client.id);
     // Company room — every tab/device of every staff member in the company, for broadcast events (e.g. website chat updates).
     await client.join(`company:${companyId}`);
+    // Per-staff room: every device / tab of this staff member receives targeted events (team chat, notifications).
+    await client.join(`staff:${staffId}`);
 
     await this.db.execute(
       `INSERT INTO staff_availability (company_id, staff_id, is_online, status, last_seen_at, created_at, updated_at)
@@ -135,6 +146,85 @@ export class StaffNotifyGateway implements OnGatewayConnection, OnGatewayDisconn
     this.logger.log(`Staff ${staffId} went offline (explicit)`);
   }
 
+  /**
+   * Team chat typing indicator: relays `{chat_id, user_id, name, typing}` to the other active members of
+   * that chat. Membership is checked against the DB with the socket's verified staff id, so a client can't
+   * spoof typing into a chat it isn't in.
+   */
+  @SubscribeMessage('team_typing')
+  async handleTeamTyping(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() body: { chat_id?: number; typing?: boolean },
+  ): Promise<void> {
+    const staffId = (client.data as Partial<AuthenticatedSocketData>).staffId;
+    const chatId = Number(body?.chat_id);
+    if (!staffId || !chatId) return;
+    const members = await this.db.query<{ user_id: number; name: string | null }>(
+      `SELECT m.user_id, (SELECT name FROM users WHERE id = ?) AS name
+         FROM team_chat_members m WHERE m.chat_id = ? AND m.left_at IS NULL`,
+      [staffId, chatId],
+    );
+    if (!members.some((m) => Number(m.user_id) === staffId)) return;
+    for (const m of members) {
+      if (Number(m.user_id) !== staffId) {
+        this.emitToStaff(Number(m.user_id), 'team_typing', {
+          chat_id: chatId,
+          user_id: staffId,
+          name: m.name,
+          typing: body?.typing !== false,
+        });
+      }
+    }
+  }
+
+  // ── Team chat commands (acked: the app shows sent / failed from the reply) ──
+
+  private authedStaffId(client: Socket): number | null {
+    return (client.data as Partial<AuthenticatedSocketData>).staffId ?? null;
+  }
+
+  @SubscribeMessage('chat:send')
+  onChatSend(@ConnectedSocket() c: Socket, @MessageBody() b: SendPayload) {
+    const id = this.authedStaffId(c);
+    return id ? this.teamChat.send(id, b) : { ok: false, error: 'Not authenticated' };
+  }
+
+  @SubscribeMessage('chat:edit')
+  onChatEdit(@ConnectedSocket() c: Socket, @MessageBody() b: { message_id: number; body: string }) {
+    const id = this.authedStaffId(c);
+    return id ? this.teamChat.edit(id, b?.message_id, b?.body) : { ok: false, error: 'Not authenticated' };
+  }
+
+  @SubscribeMessage('chat:delete')
+  onChatDelete(@ConnectedSocket() c: Socket, @MessageBody() b: { message_id: number; scope?: 'me' | 'everyone' }) {
+    const id = this.authedStaffId(c);
+    return id ? this.teamChat.delete(id, b?.message_id, b?.scope === 'me' ? 'me' : 'everyone') : { ok: false, error: 'Not authenticated' };
+  }
+
+  @SubscribeMessage('chat:react')
+  onChatReact(@ConnectedSocket() c: Socket, @MessageBody() b: { message_id: number; emoji: string }) {
+    const id = this.authedStaffId(c);
+    return id ? this.teamChat.react(id, b?.message_id, b?.emoji) : { ok: false, error: 'Not authenticated' };
+  }
+
+  @SubscribeMessage('chat:read')
+  onChatRead(@ConnectedSocket() c: Socket, @MessageBody() b: { chat_id: number }) {
+    const id = this.authedStaffId(c);
+    return id ? this.teamChat.read(id, b?.chat_id) : { ok: false, error: 'Not authenticated' };
+  }
+
+  @SubscribeMessage('chat:delivered')
+  onChatDelivered(@ConnectedSocket() c: Socket, @MessageBody() b: { chat_id: number }) {
+    const id = this.authedStaffId(c);
+    return id ? this.teamChat.delivered(id, b?.chat_id) : { ok: false, error: 'Not authenticated' };
+  }
+
+  @SubscribeMessage('chat:forward')
+  onChatForward(@ConnectedSocket() c: Socket, @MessageBody() b: { message_id: number; chat_ids: number[] }) {
+    const id = this.authedStaffId(c);
+    return id ? this.teamChat.forward(id, b?.message_id, b?.chat_ids) : { ok: false, error: 'Not authenticated' };
+  }
+
   /** Emit a named event to every connected staff socket of one company. */
   emitToCompany(companyId: number, event: string, data: unknown): void {
     this.server.to(`company:${companyId}`).emit(event, data);
@@ -145,9 +235,10 @@ export class StaffNotifyGateway implements OnGatewayConnection, OnGatewayDisconn
    * Called by the InternalController when Laravel pushes a notification.
    */
   emitToStaff(staffId: number, event: string, data: unknown): boolean {
-    const socketId = this.staffSockets.get(staffId);
-    if (!socketId) return false;
-    this.server.to(socketId).emit(event, data);
-    return true;
+    // Room-based so every connected device gets it (the old single-socket map only reached the last one).
+    const room = `staff:${staffId}`;
+    const online = (this.server.of('/staff').adapter.rooms.get(room)?.size ?? 0) > 0;
+    this.server.to(room).emit(event, data);
+    return online;
   }
 }
