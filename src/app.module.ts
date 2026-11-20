@@ -36,6 +36,7 @@ import { StatusModule } from './modules/status/status.module';
 import { MediaModule } from './modules/media/media.module';
 import { StatusStoreModule } from './modules/status-store/status-store.module';
 import { ChatMediaModule } from './modules/chat-media/chat-media.module';
+import { FilesModule } from './modules/files/files.module';
 import { AutomationModule } from './modules/automation/automation.module';
 import { TakeoverModule } from './modules/takeover/takeover.module';
 import { CatalogModule } from './modules/catalog/catalog.module';
@@ -363,6 +364,7 @@ if (dashboardServingEnabled && dashboardBuildPresent) {
     MediaModule, // Server-side media conversion (opt-in)
     StatusStoreModule, // Phase 3: inbound status/story TTL store (24h purge + media persistence)
     ChatMediaModule, // opt-in chat-media archive (retention purge + orphan sweep)
+    FilesModule, // hosts files uploaded by the Laravel backend and serves them by public URL
     AutomationModule, // single-message autoreply rules, evaluated on the inbound dispatch
     TakeoverModule, // adopts sessions whose holder's lease lapsed (crashed peer / recreated node)
     CatalogModule, // Phase 3: Catalog API (WhatsApp Business)
